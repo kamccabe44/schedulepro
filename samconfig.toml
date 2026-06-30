@@ -1,9 +1,0 @@
-[default]
-[default.global.parameters]
-stack_name = "schedulepro"
-region = "us-east-1"  # change to your preferred region
-
-[default.deploy.parameters]
-capabilities = "CAPABILITY_IAM"
-confirm_changeset = true
-resolve_s3 = true
