@@ -33,6 +33,9 @@ func handler(ctx context.Context, req events.APIGatewayV2HTTPRequest) (events.AP
 	parts := strings.Split(strings.Trim(path, "/"), "/")
 
 	switch {
+	case method == "OPTIONS":
+		return respond(200, nil)
+
 	case method == "GET" && path == "/slots":
 		return listSlots(ctx, req)
 

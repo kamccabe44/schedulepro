@@ -29,6 +29,15 @@ resource "aws_apigatewayv2_authorizer" "cognito" {
   }
 }
 
+# OPTIONS preflight requests must bypass the JWT authorizer — browsers send
+# them without an Authorization header, so the authorizer would reject them.
+# This explicit route matches before $default and lets them through unauthenticated.
+resource "aws_apigatewayv2_route" "options" {
+  api_id    = aws_apigatewayv2_api.http_api.id
+  route_key = "OPTIONS /{proxy+}"
+  target    = "integrations/${aws_apigatewayv2_integration.lambda.id}"
+}
+
 # Public route — slot availability, no auth required
 resource "aws_apigatewayv2_route" "slots_public" {
   api_id    = aws_apigatewayv2_api.http_api.id
