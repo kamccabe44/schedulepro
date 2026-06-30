@@ -14,6 +14,7 @@ import (
 
 var db *dynamodb.Client
 var tableName string
+var stageName string
 
 func init() {
 	cfg, err := config.LoadDefaultConfig(context.Background())
@@ -22,11 +23,18 @@ func init() {
 	}
 	db = dynamodb.NewFromConfig(cfg)
 	tableName = os.Getenv("TABLE_NAME")
+	stageName = os.Getenv("STAGE_NAME")
 }
 
 func handler(ctx context.Context, req events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error) {
 	method := req.RequestContext.HTTP.Method
-	path := req.RawPath
+
+	// API Gateway includes the stage name in rawPath for named stages
+	// (e.g. /prod/slots). Strip it so route matching works correctly.
+	path := strings.TrimPrefix(req.RawPath, "/"+stageName)
+	if path == "" {
+		path = "/"
+	}
 
 	// /appointments/{id}/cancel — extract id from path manually
 	// (path params aren't populated on the $default catch-all route)

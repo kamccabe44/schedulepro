@@ -58,7 +58,8 @@ resource "aws_lambda_function" "api" {
 
   environment {
     variables = {
-      TABLE_NAME = aws_dynamodb_table.appointments.name
+      TABLE_NAME  = aws_dynamodb_table.appointments.name
+      STAGE_NAME  = aws_apigatewayv2_stage.prod.name
     }
   }
 }
