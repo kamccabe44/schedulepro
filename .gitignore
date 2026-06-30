@@ -6,3 +6,5 @@ __pycache__/
 samconfig.toml.local
 /tmp/
 node_modules/
+backend/bootstrap
+backend/schedulepro
