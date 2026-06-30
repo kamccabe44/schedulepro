@@ -40,7 +40,7 @@ func handler(ctx context.Context, req events.APIGatewayV2HTTPRequest) (events.AP
 	path := req.RequestContext.HTTP.Path
 	id := req.PathParameters["id"]
 
-	switch method {
+	switch {
 	case method == "GET" && path == "/events":
 		return listEvents(ctx, req)
 	case method == "POST" && path == "/events":
@@ -52,7 +52,7 @@ func handler(ctx context.Context, req events.APIGatewayV2HTTPRequest) (events.AP
 	case method == "DELETE" && id != "":
 		return deleteEvent(ctx, id)
 	default:
-		return respondError(404, map[string]string{"error": "not found"})
+		return respond(404, map[string]string{"error": "not found"})
 	}
 }
 
