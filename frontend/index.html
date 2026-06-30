@@ -3,91 +3,84 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>SchedulePro</title>
+  <title>The Chair — Book a Haircut</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <div id="app">
-    <header>
-      <div class="header-left">
-        <h1>SchedulePro</h1>
+  <header>
+    <div class="brand">
+      <span class="brand-icon">✂</span>
+      <div>
+        <div class="brand-name">The Chair</div>
+        <div class="brand-tagline">Fresh cuts, no waiting</div>
       </div>
-      <div class="header-center">
-        <button id="prevBtn" class="nav-btn">&#8249;</button>
-        <span id="currentPeriod"></span>
-        <button id="nextBtn" class="nav-btn">&#8250;</button>
-        <button id="todayBtn" class="btn-secondary">Today</button>
+    </div>
+    <div id="authArea">
+      <button id="loginBtn" class="btn-primary">Sign In / Create Account</button>
+      <div id="userMenu" class="hidden">
+        <span id="userName"></span>
+        <button id="logoutBtn" class="btn-ghost">Sign Out</button>
       </div>
-      <div class="header-right">
-        <select id="viewSelect">
-          <option value="month">Month</option>
-          <option value="week">Week</option>
-          <option value="day">Day</option>
-        </select>
-        <button id="newEventBtn" class="btn-primary">+ New Event</button>
-      </div>
-    </header>
+    </div>
+  </header>
 
-    <main id="calendarContainer"></main>
-  </div>
+  <!-- Shown when logged out -->
+  <section id="hero" class="hidden">
+    <div class="hero-content">
+      <h1>Book your next haircut online</h1>
+      <p>Create a free account to browse available times and book with one click.</p>
+      <button id="heroLoginBtn" class="btn-primary btn-lg">Get Started</button>
+    </div>
+  </section>
 
-  <!-- Event Modal -->
-  <div id="modal" class="modal hidden">
-    <div class="modal-backdrop" id="modalBackdrop"></div>
-    <div class="modal-dialog">
-      <div class="modal-header">
-        <h2 id="modalTitle">New Event</h2>
-        <button class="close-btn" id="closeModal">&times;</button>
-      </div>
-      <form id="eventForm">
-        <input type="hidden" id="eventId" />
-        <div class="form-group">
-          <label for="title">Title *</label>
-          <input type="text" id="title" required placeholder="Event title" />
-        </div>
+  <!-- Shown when logged in -->
+  <main id="app" class="hidden">
+    <div class="container">
+
+      <!-- Booking panel -->
+      <section class="card" id="bookingPanel">
+        <h2>Book an Appointment</h2>
+
         <div class="form-row">
           <div class="form-group">
-            <label for="startTime">Start *</label>
-            <input type="datetime-local" id="startTime" required />
+            <label for="datePicker">Select a date</label>
+            <input type="date" id="datePicker" />
           </div>
           <div class="form-group">
-            <label for="endTime">End *</label>
-            <input type="datetime-local" id="endTime" required />
+            <label for="servicePicker">Service</label>
+            <select id="servicePicker">
+              <option value="">— choose a service —</option>
+            </select>
           </div>
         </div>
-        <div class="form-group">
-          <label for="location">Location</label>
-          <input type="text" id="location" placeholder="Optional location" />
+
+        <div id="slotsSection" class="hidden">
+          <label>Available times</label>
+          <div id="slotsGrid" class="slots-grid"></div>
         </div>
-        <div class="form-group">
-          <label for="description">Description</label>
-          <textarea id="description" rows="3" placeholder="Optional notes"></textarea>
-        </div>
-        <div class="form-group">
-          <label for="color">Color</label>
-          <div class="color-options" id="colorOptions">
-            <button type="button" class="color-swatch active" data-color="#3b82f6" style="background:#3b82f6"></button>
-            <button type="button" class="color-swatch" data-color="#10b981" style="background:#10b981"></button>
-            <button type="button" class="color-swatch" data-color="#f59e0b" style="background:#f59e0b"></button>
-            <button type="button" class="color-swatch" data-color="#ef4444" style="background:#ef4444"></button>
-            <button type="button" class="color-swatch" data-color="#8b5cf6" style="background:#8b5cf6"></button>
-            <button type="button" class="color-swatch" data-color="#ec4899" style="background:#ec4899"></button>
+
+        <div id="bookingConfirm" class="hidden">
+          <div class="confirm-summary" id="confirmSummary"></div>
+          <div class="form-group">
+            <label for="bookingNotes">Notes for the barber (optional)</label>
+            <input type="text" id="bookingNotes" placeholder="e.g. fade on the sides" />
           </div>
-          <input type="hidden" id="color" value="#3b82f6" />
+          <button id="confirmBookBtn" class="btn-primary">Confirm Booking</button>
         </div>
-        <div class="form-actions">
-          <button type="button" id="deleteEventBtn" class="btn-danger hidden">Delete</button>
-          <div class="form-actions-right">
-            <button type="button" id="cancelBtn" class="btn-secondary">Cancel</button>
-            <button type="submit" class="btn-primary">Save</button>
-          </div>
-        </div>
-      </form>
+      </section>
+
+      <!-- My appointments -->
+      <section class="card" id="appointmentsPanel">
+        <h2>My Upcoming Appointments</h2>
+        <div id="appointmentsList"><p class="muted">Loading...</p></div>
+      </section>
+
     </div>
-  </div>
+  </main>
 
   <div id="toast" class="toast hidden"></div>
 
+  <script src="config.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

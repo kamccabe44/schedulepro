@@ -15,54 +15,144 @@ import (
 	"github.com/google/uuid"
 )
 
-func listEvents(ctx context.Context, req events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error) {
-	input := &dynamodb.ScanInput{
-		TableName: &tableName,
+// listSlots returns all slots for a date with availability status.
+// Public — no auth required.
+func listSlots(ctx context.Context, req events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error) {
+	date := req.QueryStringParameters["date"]
+	if date == "" {
+		return respond(400, map[string]string{"error": "date query parameter required (YYYY-MM-DD)"})
 	}
 
-	start := req.QueryStringParameters["start"]
-	end := req.QueryStringParameters["end"]
-
-	if start != "" && end != "" {
-		input.FilterExpression = aws.String("startDate BETWEEN :s AND :e")
-		input.ExpressionAttributeValues = map[string]types.AttributeValue{
-			":s": &types.AttributeValueMemberS{Value: start},
-			":e": &types.AttributeValueMemberS{Value: end},
-		}
+	allSlots, err := generateSlots(date)
+	if err != nil {
+		return respond(400, map[string]string{"error": err.Error()})
 	}
 
-	out, err := db.Scan(ctx, input)
+	// Find which slots are already booked
+	out, err := db.Query(ctx, &dynamodb.QueryInput{
+		TableName:              &tableName,
+		IndexName:              aws.String("date-index"),
+		KeyConditionExpression: aws.String("#date = :date"),
+		FilterExpression:       aws.String("#status = :booked"),
+		ExpressionAttributeNames: map[string]string{
+			"#date":   "date",
+			"#status": "status",
+		},
+		ExpressionAttributeValues: map[string]types.AttributeValue{
+			":date":   &types.AttributeValueMemberS{Value: date},
+			":booked": &types.AttributeValueMemberS{Value: "booked"},
+		},
+	})
 	if err != nil {
 		return respond(500, map[string]string{"error": err.Error()})
 	}
 
-	var evs []Event
-	if err := attributevalue.UnmarshalListOfMaps(out.Items, &evs); err != nil {
-		return respond(500, map[string]string{"error": err.Error()})
+	booked := map[string]bool{}
+	for _, item := range out.Items {
+		if ts, ok := item["timeSlot"].(*types.AttributeValueMemberS); ok {
+			booked[ts.Value] = true
+		}
 	}
 
-	return respond(200, evs)
+	result := make([]SlotResponse, len(allSlots))
+	for i, ts := range allSlots {
+		result[i] = SlotResponse{
+			Date:      date,
+			TimeSlot:  ts,
+			Available: !booked[ts],
+		}
+	}
+
+	return respond(200, result)
 }
 
-func createEvent(ctx context.Context, req events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error) {
-	var ev Event
-	if err := json.Unmarshal([]byte(req.Body), &ev); err != nil {
+// listServices returns the available service options.
+func listServices() (events.APIGatewayV2HTTPResponse, error) {
+	list := make([]Service, 0, len(services))
+	for _, s := range services {
+		list = append(list, s)
+	}
+	return respond(200, list)
+}
+
+// bookAppointment creates a new appointment for the authenticated user.
+func bookAppointment(ctx context.Context, req events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error) {
+	userID, userEmail, userName := claimsFromRequest(req)
+	if userID == "" {
+		return respond(401, map[string]string{"error": "unauthorized"})
+	}
+
+	var body struct {
+		Date     string `json:"date"`
+		TimeSlot string `json:"timeSlot"`
+		Service  string `json:"service"`
+		Notes    string `json:"notes"`
+	}
+	if err := json.Unmarshal([]byte(req.Body), &body); err != nil {
 		return respond(400, map[string]string{"error": "invalid request body"})
 	}
 
-	if strings.TrimSpace(ev.Title) == "" || ev.StartTime == "" || ev.EndTime == "" {
-		return respond(400, map[string]string{"error": "title, startTime, and endTime are required"})
-
+	if body.Date == "" || body.TimeSlot == "" || body.Service == "" {
+		return respond(400, map[string]string{"error": "date, timeSlot, and service are required"})
 	}
 
-	ev.ID = uuid.New().String()
-	ev.StartDate = ev.StartTime[:10]
-	ev.CreatedAt = time.Now().UTC()
-	if ev.Color == "" {
-		ev.Color = "#3b82f6"
+	if _, ok := services[body.Service]; !ok {
+		return respond(400, map[string]string{"error": "invalid service"})
 	}
 
-	item, err := attributevalue.MarshalMap(ev)
+	// Verify the requested slot exists in the shop schedule
+	allSlots, err := generateSlots(body.Date)
+	if err != nil {
+		return respond(400, map[string]string{"error": err.Error()})
+	}
+	validSlot := false
+	for _, s := range allSlots {
+		if s == body.TimeSlot {
+			validSlot = true
+			break
+		}
+	}
+	if !validSlot {
+		return respond(400, map[string]string{"error": "invalid time slot for this date"})
+	}
+
+	// Check the slot isn't already taken
+	out, err := db.Query(ctx, &dynamodb.QueryInput{
+		TableName:              &tableName,
+		IndexName:              aws.String("date-index"),
+		KeyConditionExpression: aws.String("#date = :date"),
+		FilterExpression:       aws.String("timeSlot = :ts AND #status = :booked"),
+		ExpressionAttributeNames: map[string]string{
+			"#date":   "date",
+			"#status": "status",
+		},
+		ExpressionAttributeValues: map[string]types.AttributeValue{
+			":date":   &types.AttributeValueMemberS{Value: body.Date},
+			":ts":     &types.AttributeValueMemberS{Value: body.TimeSlot},
+			":booked": &types.AttributeValueMemberS{Value: "booked"},
+		},
+	})
+	if err != nil {
+		return respond(500, map[string]string{"error": err.Error()})
+	}
+	if out.Count > 0 {
+		return respond(409, map[string]string{"error": "this time slot is already booked"})
+	}
+
+	appt := Appointment{
+		ID:        uuid.New().String(),
+		UserID:    userID,
+		UserEmail: userEmail,
+		UserName:  userName,
+		Date:      body.Date,
+		TimeSlot:  body.TimeSlot,
+		Service:   body.Service,
+		Status:    "booked",
+		Notes:     body.Notes,
+		CreatedAt: time.Now().UTC(),
+	}
+
+	item, err := attributevalue.MarshalMap(appt)
 	if err != nil {
 		return respond(500, map[string]string{"error": err.Error()})
 	}
@@ -75,110 +165,115 @@ func createEvent(ctx context.Context, req events.APIGatewayV2HTTPRequest) (event
 		return respond(500, map[string]string{"error": err.Error()})
 	}
 
-	return respond(201, ev)
+	return respond(201, appt)
 }
 
-func getEvent(ctx context.Context, id string) (events.APIGatewayV2HTTPResponse, error) {
-	out, err := db.GetItem(ctx, &dynamodb.GetItemInput{
+// myAppointments returns all appointments for the authenticated user.
+func myAppointments(ctx context.Context, req events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error) {
+	userID, _, _ := claimsFromRequest(req)
+	if userID == "" {
+		return respond(401, map[string]string{"error": "unauthorized"})
+	}
+
+	// Return appointments from today onward
+	today := time.Now().Format("2006-01-02")
+
+	out, err := db.Query(ctx, &dynamodb.QueryInput{
+		TableName:              &tableName,
+		IndexName:              aws.String("userId-date-index"),
+		KeyConditionExpression: aws.String("userId = :uid AND #date >= :today"),
+		ExpressionAttributeNames: map[string]string{
+			"#date": "date",
+		},
+		ExpressionAttributeValues: map[string]types.AttributeValue{
+			":uid":   &types.AttributeValueMemberS{Value: userID},
+			":today": &types.AttributeValueMemberS{Value: today},
+		},
+	})
+	if err != nil {
+		return respond(500, map[string]string{"error": err.Error()})
+	}
+
+	var appts []Appointment
+	if err := attributevalue.UnmarshalListOfMaps(out.Items, &appts); err != nil {
+		return respond(500, map[string]string{"error": err.Error()})
+	}
+
+	if appts == nil {
+		appts = []Appointment{}
+	}
+	return respond(200, appts)
+}
+
+// cancelAppointment marks the appointment as cancelled.
+// Users can only cancel their own appointments.
+func cancelAppointment(ctx context.Context, req events.APIGatewayV2HTTPRequest, id string) (events.APIGatewayV2HTTPResponse, error) {
+	userID, _, _ := claimsFromRequest(req)
+	if userID == "" {
+		return respond(401, map[string]string{"error": "unauthorized"})
+	}
+
+	// Fetch the appointment first to verify ownership
+	result, err := db.GetItem(ctx, &dynamodb.GetItemInput{
 		TableName: &tableName,
 		Key: map[string]types.AttributeValue{
 			"id": &types.AttributeValueMemberS{Value: id},
 		},
 	})
-
 	if err != nil {
 		return respond(500, map[string]string{"error": err.Error()})
 	}
-
-	if out.Item == nil {
-		return respond(404, map[string]string{"error": "event not found"})
+	if result.Item == nil {
+		return respond(404, map[string]string{"error": "appointment not found"})
 	}
 
-	var ev Event
-	if err := attributevalue.UnmarshalMap(out.Item, &ev); err != nil {
+	var appt Appointment
+	if err := attributevalue.UnmarshalMap(result.Item, &appt); err != nil {
 		return respond(500, map[string]string{"error": err.Error()})
 	}
 
-	return respond(200, ev)
-}
-
-func updateEvent(ctx context.Context, req events.APIGatewayV2HTTPRequest, id string) (events.APIGatewayV2HTTPResponse, error) {
-	var body map[string]string
-	if err := json.Unmarshal([]byte(req.Body), &body); err != nil {
-		return respond(400, map[string]string{"error": "invalid request body"})
+	if appt.UserID != userID {
+		return respond(403, map[string]string{"error": "forbidden"})
 	}
 
-	allowed := []string{"title", "startTime", "endTime", "description", "location", "color"}
-
-	var setClauses []string
-	exprNames := map[string]string{}
-	exprValues := map[string]types.AttributeValue{}
-
-	for _, field := range allowed {
-		val, ok := body[field]
-		if !ok {
-			continue
-		}
-		setClauses = append(setClauses, "#"+field+" = :"+field)
-		exprNames["#"+field] = field
-		exprValues[":"+field] = &types.AttributeValueMemberS{Value: val}
+	if appt.Status == "cancelled" {
+		return respond(400, map[string]string{"error": "appointment is already cancelled"})
 	}
 
-	if len(setClauses) == 0 {
-		return respond(400, map[string]string{"error": "no valid fields to update"})
-	}
-
-	if st, ok := body["startTime"]; ok {
-		setClauses = append(setClauses, "#startDate = :startDate")
-		exprNames["#startDate"] = "startDate"
-		exprValues[":startDate"] = &types.AttributeValueMemberS{Value: st[:10]}
-	}
-
-	expr := "SET " + strings.Join(setClauses, ", ")
-
-	out, err := db.UpdateItem(ctx, &dynamodb.UpdateItemInput{
+	_, err = db.UpdateItem(ctx, &dynamodb.UpdateItemInput{
 		TableName: &tableName,
 		Key: map[string]types.AttributeValue{
 			"id": &types.AttributeValueMemberS{Value: id},
 		},
-		UpdateExpression:          aws.String(expr),
-		ExpressionAttributeNames:  exprNames,
-		ExpressionAttributeValues: exprValues,
-		ConditionExpression:       aws.String("attribute_exists(id)"),
-		ReturnValues:              types.ReturnValueAllNew,
-	})
-
-	if err != nil {
-		var condErr *types.ConditionalCheckFailedException
-		if errors.As(err, &condErr) {
-			return respond(404, map[string]string{"error": "event not found"})
-		}
-		return respond(500, map[string]string{"error": err.Error()})
-	}
-
-	var ev Event
-	if err := attributevalue.UnmarshalMap(out.Attributes, &ev); err != nil {
-		return respond(500, map[string]string{"error": err.Error()})
-	}
-
-	return respond(200, ev)
-}
-
-func deleteEvent(ctx context.Context, id string) (events.APIGatewayV2HTTPResponse, error) {
-	_, err := db.DeleteItem(ctx, &dynamodb.DeleteItemInput{
-		TableName: &tableName,
-		Key: map[string]types.AttributeValue{
-			"id": &types.AttributeValueMemberS{Value: id},
+		UpdateExpression: aws.String("SET #status = :cancelled"),
+		ExpressionAttributeNames: map[string]string{
+			"#status": "status",
+		},
+		ExpressionAttributeValues: map[string]types.AttributeValue{
+			":cancelled": &types.AttributeValueMemberS{Value: "cancelled"},
 		},
 		ConditionExpression: aws.String("attribute_exists(id)"),
 	})
 	if err != nil {
 		var condErr *types.ConditionalCheckFailedException
 		if errors.As(err, &condErr) {
-			return respond(404, map[string]string{"error": "event not found"})
+			return respond(404, map[string]string{"error": "appointment not found"})
 		}
 		return respond(500, map[string]string{"error": err.Error()})
 	}
 
-	return respond(204, nil)
+	appt.Status = "cancelled"
+	return respond(200, appt)
+}
+
+// claimsFromRequest extracts verified JWT claims injected by API Gateway.
+func claimsFromRequest(req events.APIGatewayV2HTTPRequest) (userID, email, name string) {
+	claims := req.RequestContext.Authorizer.JWT.Claims
+	userID = claims["sub"]
+	email = claims["email"]
+	name = claims["name"]
+	if name == "" {
+		name = strings.Split(email, "@")[0]
+	}
+	return
 }

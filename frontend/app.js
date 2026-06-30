@@ -1,317 +1,308 @@
-// ── Config ───────────────────────────────────────────────────────────────────
-// Set API_URL to your deployed API Gateway URL (from SAM deploy output)
-const API_URL = window.SCHEDULEPRO_API_URL || "https://YOUR_API_GATEWAY_URL/prod";
+// Config is injected by deploy.sh via config.js:
+// window.SCHEDPRO_CONFIG = { apiUrl, cognitoDomain, cognitoClientId, cognitoRedirectUri }
+const CFG = window.SCHEDPRO_CONFIG || {};
+const API = CFG.apiUrl || "";
 
-// ── State ─────────────────────────────────────────────────────────────────────
-let currentDate = new Date();
-let view = "month";
-let events = [];
-let selectedColor = "#3b82f6";
+// ── Auth (OAuth2 Authorization Code + PKCE) ───────────────────────────────────
 
-// ── Init ──────────────────────────────────────────────────────────────────────
-document.addEventListener("DOMContentLoaded", () => {
-  document.getElementById("prevBtn").onclick = () => navigate(-1);
-  document.getElementById("nextBtn").onclick = () => navigate(1);
-  document.getElementById("todayBtn").onclick = () => { currentDate = new Date(); render(); };
-  document.getElementById("viewSelect").onchange = (e) => { view = e.target.value; render(); };
-  document.getElementById("newEventBtn").onclick = () => openModal();
-  document.getElementById("closeModal").onclick = closeModal;
-  document.getElementById("cancelBtn").onclick = closeModal;
-  document.getElementById("modalBackdrop").onclick = closeModal;
-  document.getElementById("deleteEventBtn").onclick = deleteCurrentEvent;
-  document.getElementById("eventForm").onsubmit = saveEvent;
-  document.getElementById("colorOptions").onclick = (e) => {
-    const swatch = e.target.closest(".color-swatch");
-    if (!swatch) return;
-    document.querySelectorAll(".color-swatch").forEach(s => s.classList.remove("active"));
-    swatch.classList.add("active");
-    selectedColor = swatch.dataset.color;
-    document.getElementById("color").value = selectedColor;
-  };
-  render();
+function base64urlEncode(buffer) {
+  return btoa(String.fromCharCode(...new Uint8Array(buffer)))
+    .replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
+}
+
+function generateVerifier() {
+  const buf = new Uint8Array(32);
+  crypto.getRandomValues(buf);
+  return base64urlEncode(buf);
+}
+
+async function generateChallenge(verifier) {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier));
+  return base64urlEncode(buf);
+}
+
+async function startLogin() {
+  const verifier = generateVerifier();
+  const challenge = await generateChallenge(verifier);
+  sessionStorage.setItem("pkce_verifier", verifier);
+
+  const params = new URLSearchParams({
+    response_type: "code",
+    client_id:     CFG.cognitoClientId,
+    redirect_uri:  CFG.cognitoRedirectUri,
+    scope:         "openid email profile",
+    code_challenge_method: "S256",
+    code_challenge: challenge,
+  });
+  window.location.href = `${CFG.cognitoDomain}/oauth2/authorize?${params}`;
+}
+
+async function handleCallback(code) {
+  const verifier = sessionStorage.getItem("pkce_verifier");
+  sessionStorage.removeItem("pkce_verifier");
+
+  const res = await fetch(`${CFG.cognitoDomain}/oauth2/token`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      grant_type:    "authorization_code",
+      client_id:     CFG.cognitoClientId,
+      redirect_uri:  CFG.cognitoRedirectUri,
+      code,
+      code_verifier: verifier,
+    }),
+  });
+
+  if (!res.ok) {
+    showToast("Login failed. Please try again.", true);
+    return;
+  }
+
+  const tokens = await res.json();
+  sessionStorage.setItem("access_token", tokens.access_token);
+  sessionStorage.setItem("id_token", tokens.id_token);
+
+  // Clean the ?code= from the URL without reloading
+  window.history.replaceState({}, "", window.location.pathname);
+  initApp();
+}
+
+function getToken() {
+  return sessionStorage.getItem("access_token");
+}
+
+function logout() {
+  sessionStorage.removeItem("access_token");
+  sessionStorage.removeItem("id_token");
+  const params = new URLSearchParams({
+    client_id:  CFG.cognitoClientId,
+    logout_uri: CFG.cognitoRedirectUri,
+  });
+  window.location.href = `${CFG.cognitoDomain}/logout?${params}`;
+}
+
+function parseIdToken() {
+  const token = sessionStorage.getItem("id_token");
+  if (!token) return null;
+  try {
+    return JSON.parse(atob(token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")));
+  } catch {
+    return null;
+  }
+}
+
+// ── App init ──────────────────────────────────────────────────────────────────
+
+document.addEventListener("DOMContentLoaded", async () => {
+  const code = new URLSearchParams(window.location.search).get("code");
+  if (code) {
+    await handleCallback(code);
+    return;
+  }
+
+  if (getToken()) {
+    initApp();
+  } else {
+    showLoggedOut();
+  }
 });
 
-// ── Navigation ────────────────────────────────────────────────────────────────
-function navigate(dir) {
-  if (view === "month") currentDate.setMonth(currentDate.getMonth() + dir);
-  else if (view === "week") currentDate.setDate(currentDate.getDate() + dir * 7);
-  else currentDate.setDate(currentDate.getDate() + dir);
-  render();
+function showLoggedOut() {
+  document.getElementById("hero").classList.remove("hidden");
+  document.getElementById("loginBtn").classList.remove("hidden");
+  document.getElementById("userMenu").classList.add("hidden");
+  document.getElementById("heroLoginBtn").onclick = startLogin;
+  document.getElementById("loginBtn").onclick = startLogin;
 }
 
-// ── Render ────────────────────────────────────────────────────────────────────
-async function render() {
-  const { start, end } = getViewRange();
-  await fetchEvents(start, end);
-  updatePeriodLabel();
+function initApp() {
+  const claims = parseIdToken();
+  if (!claims) { showLoggedOut(); return; }
 
-  const container = document.getElementById("calendarContainer");
-  container.innerHTML = "";
-  const cal = document.createElement("div");
-  cal.className = "calendar";
-  if (view === "month") cal.appendChild(buildMonthView());
-  else if (view === "week") cal.appendChild(buildWeekView());
-  else cal.appendChild(buildDayView());
-  container.appendChild(cal);
+  document.getElementById("hero").classList.add("hidden");
+  document.getElementById("app").classList.remove("hidden");
+  document.getElementById("loginBtn").classList.add("hidden");
+  document.getElementById("userMenu").classList.remove("hidden");
+  document.getElementById("userName").textContent = claims.name || claims.email;
+  document.getElementById("logoutBtn").onclick = logout;
+
+  setupBookingForm();
+  loadMyAppointments();
 }
 
-function getViewRange() {
-  const d = new Date(currentDate);
-  if (view === "month") {
-    const start = new Date(d.getFullYear(), d.getMonth(), 1);
-    const end = new Date(d.getFullYear(), d.getMonth() + 1, 0);
-    return { start: fmt(start), end: fmt(end) };
-  } else if (view === "week") {
-    const dow = d.getDay();
-    const start = new Date(d); start.setDate(d.getDate() - dow);
-    const end = new Date(start); end.setDate(start.getDate() + 6);
-    return { start: fmt(start), end: fmt(end) };
-  } else {
-    return { start: fmt(d), end: fmt(d) };
-  }
-}
+// ── Booking form ──────────────────────────────────────────────────────────────
 
-function updatePeriodLabel() {
-  const el = document.getElementById("currentPeriod");
-  const d = currentDate;
-  if (view === "month") {
-    el.textContent = d.toLocaleDateString("en-US", { month: "long", year: "numeric" });
-  } else if (view === "week") {
-    const dow = d.getDay();
-    const start = new Date(d); start.setDate(d.getDate() - dow);
-    const end = new Date(start); end.setDate(start.getDate() + 6);
-    el.textContent = `${start.toLocaleDateString("en-US", { month: "short", day: "numeric" })} – ${end.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`;
-  } else {
-    el.textContent = d.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" });
-  }
-}
+let selectedSlot = null;
 
-// ── Month View ────────────────────────────────────────────────────────────────
-function buildMonthView() {
-  const frag = document.createDocumentFragment();
-  const grid = document.createElement("div");
-  grid.className = "month-grid";
+async function setupBookingForm() {
+  // Set date picker min to today
+  const today = new Date().toISOString().slice(0, 10);
+  const picker = document.getElementById("datePicker");
+  picker.min = today;
+  picker.value = today;
+  picker.onchange = () => loadSlots(picker.value);
 
-  ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].forEach(d => {
-    const h = document.createElement("div");
-    h.className = "day-header";
-    h.textContent = d;
-    grid.appendChild(h);
-  });
-
-  const year = currentDate.getFullYear(), month = currentDate.getMonth();
-  const firstDay = new Date(year, month, 1).getDay();
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const daysInPrev = new Date(year, month, 0).getDate();
-  const today = fmt(new Date());
-
-  const totalCells = Math.ceil((firstDay + daysInMonth) / 7) * 7;
-
-  for (let i = 0; i < totalCells; i++) {
-    let cellDate, isOther = false;
-    if (i < firstDay) { cellDate = new Date(year, month - 1, daysInPrev - firstDay + i + 1); isOther = true; }
-    else if (i >= firstDay + daysInMonth) { cellDate = new Date(year, month + 1, i - firstDay - daysInMonth + 1); isOther = true; }
-    else { cellDate = new Date(year, month, i - firstDay + 1); }
-
-    const cell = document.createElement("div");
-    cell.className = "day-cell" + (isOther ? " other-month" : "") + (fmt(cellDate) === today ? " today" : "");
-    cell.onclick = (e) => { if (e.target === cell || e.target.className === "day-number") openModal(null, fmt(cellDate)); };
-
-    const num = document.createElement("div");
-    num.className = "day-number";
-    num.textContent = cellDate.getDate();
-    cell.appendChild(num);
-
-    const dayStr = fmt(cellDate);
-    const dayEvents = events.filter(ev => ev.startTime?.startsWith(dayStr)).slice(0, 3);
-    dayEvents.forEach(ev => { cell.appendChild(makeChip(ev)); });
-    if (events.filter(ev => ev.startTime?.startsWith(dayStr)).length > 3) {
-      const more = document.createElement("div");
-      more.className = "more-link";
-      more.textContent = `+${events.filter(ev => ev.startTime?.startsWith(dayStr)).length - 3} more`;
-      cell.appendChild(more);
-    }
-    grid.appendChild(cell);
-  }
-
-  frag.appendChild(grid);
-  return frag;
-}
-
-// ── Week/Day Views ────────────────────────────────────────────────────────────
-function buildWeekView() {
-  const dow = currentDate.getDay();
-  const days = Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(currentDate); d.setDate(currentDate.getDate() - dow + i); return d;
-  });
-  return buildTimeGrid(days);
-}
-
-function buildDayView() {
-  return buildTimeGrid([new Date(currentDate)]);
-}
-
-function buildTimeGrid(days) {
-  const today = fmt(new Date());
-  const wrapper = document.createDocumentFragment();
-  const grid = document.createElement("div");
-  grid.className = "time-grid";
-
-  // Time labels
-  const labels = document.createElement("div");
-  labels.className = "time-labels";
-  labels.appendChild(document.createElement("div")); // spacer for header row
-  labels.children[0].style.height = "41px";
-  for (let h = 0; h < 24; h++) {
-    const lbl = document.createElement("div");
-    lbl.className = "time-label";
-    lbl.textContent = h === 0 ? "" : `${h % 12 || 12}${h < 12 ? "am" : "pm"}`;
-    labels.appendChild(lbl);
-  }
-  grid.appendChild(labels);
-
-  // Day columns container
-  const cols = document.createElement("div");
-  cols.className = "day-columns";
-  cols.style.gridTemplateColumns = `repeat(${days.length}, 1fr)`;
-
-  days.forEach(day => {
-    const dayStr = fmt(day);
-    const col = document.createElement("div");
-    col.className = "day-column";
-
-    const header = document.createElement("div");
-    header.className = "day-col-header" + (dayStr === today ? " today" : "");
-    header.textContent = day.toLocaleDateString("en-US", { weekday: "short", month: "numeric", day: "numeric" });
-    col.appendChild(header);
-
-    for (let h = 0; h < 24; h++) {
-      const slot = document.createElement("div");
-      slot.className = "hour-slot";
-      slot.onclick = () => openModal(null, `${dayStr}T${String(h).padStart(2,"0")}:00`);
-      col.appendChild(slot);
-    }
-
-    // Place events
-    events.filter(ev => ev.startTime?.startsWith(dayStr)).forEach(ev => {
-      const start = new Date(ev.startTime);
-      const end = new Date(ev.endTime);
-      const topPct = (start.getHours() + start.getMinutes() / 60) / 24 * 100;
-      const heightPct = Math.max((end - start) / (24 * 3600000) * 100, 2);
-      const chip = document.createElement("div");
-      chip.className = "timed-event";
-      chip.style.cssText = `background:${ev.color || "#3b82f6"};top:calc(41px + ${topPct}%);height:${heightPct}%`;
-      chip.textContent = ev.title;
-      chip.onclick = (e) => { e.stopPropagation(); openModal(ev); };
-      col.appendChild(chip);
+  // Populate service dropdown
+  try {
+    const svcs = await api("GET", "/services");
+    const sel = document.getElementById("servicePicker");
+    svcs.sort((a, b) => a.name.localeCompare(b.name)).forEach(s => {
+      const opt = document.createElement("option");
+      opt.value = s.id;
+      opt.textContent = `${s.name} — ${s.price} (${s.duration} min)`;
+      sel.appendChild(opt);
     });
-
-    cols.appendChild(col);
-  });
-  grid.appendChild(cols);
-  wrapper.appendChild(grid);
-  return wrapper;
-}
-
-function makeChip(ev) {
-  const chip = document.createElement("div");
-  chip.className = "event-chip";
-  chip.style.background = ev.color || "#3b82f6";
-  chip.textContent = ev.title;
-  chip.onclick = (e) => { e.stopPropagation(); openModal(ev); };
-  return chip;
-}
-
-// ── Modal ─────────────────────────────────────────────────────────────────────
-function openModal(ev = null, dateStr = null) {
-  document.getElementById("modal").classList.remove("hidden");
-  document.getElementById("modalTitle").textContent = ev ? "Edit Event" : "New Event";
-  document.getElementById("deleteEventBtn").classList.toggle("hidden", !ev);
-
-  if (ev) {
-    document.getElementById("eventId").value = ev.id;
-    document.getElementById("title").value = ev.title;
-    document.getElementById("startTime").value = toLocalInput(ev.startTime);
-    document.getElementById("endTime").value = toLocalInput(ev.endTime);
-    document.getElementById("location").value = ev.location || "";
-    document.getElementById("description").value = ev.description || "";
-    setColor(ev.color || "#3b82f6");
-  } else {
-    document.getElementById("eventForm").reset();
-    document.getElementById("eventId").value = "";
-    const base = dateStr ? new Date(dateStr) : new Date();
-    if (!base.getHours()) base.setHours(9);
-    const end = new Date(base); end.setHours(base.getHours() + 1);
-    document.getElementById("startTime").value = toLocalInput(base.toISOString());
-    document.getElementById("endTime").value = toLocalInput(end.toISOString());
-    setColor("#3b82f6");
+    sel.onchange = () => { selectedSlot = null; updateConfirm(); loadSlots(picker.value); };
+  } catch {
+    showToast("Could not load services", true);
   }
+
+  document.getElementById("confirmBookBtn").onclick = confirmBooking;
+
+  loadSlots(today);
 }
 
-function setColor(hex) {
-  selectedColor = hex;
-  document.getElementById("color").value = hex;
-  document.querySelectorAll(".color-swatch").forEach(s => {
-    s.classList.toggle("active", s.dataset.color === hex);
-  });
-}
-
-function closeModal() { document.getElementById("modal").classList.add("hidden"); }
-
-async function saveEvent(e) {
-  e.preventDefault();
-  const id = document.getElementById("eventId").value;
-  const payload = {
-    title: document.getElementById("title").value,
-    startTime: toISO(document.getElementById("startTime").value),
-    endTime: toISO(document.getElementById("endTime").value),
-    location: document.getElementById("location").value,
-    description: document.getElementById("description").value,
-    color: document.getElementById("color").value,
-  };
+async function loadSlots(date) {
+  const slotsSection = document.getElementById("slotsSection");
+  const grid = document.getElementById("slotsGrid");
 
   try {
-    if (id) {
-      await api("PUT", `/events/${id}`, payload);
-      toast("Event updated");
-    } else {
-      await api("POST", "/events", payload);
-      toast("Event created");
+    const slots = await api("GET", `/slots?date=${date}`);
+    grid.innerHTML = "";
+    slotsSection.classList.remove("hidden");
+
+    if (slots.length === 0) {
+      grid.innerHTML = `<p class="muted">Shop is closed on this day.</p>`;
+      return;
     }
-    closeModal();
-    render();
-  } catch (err) {
-    toast(err.message, true);
+
+    slots.forEach(s => {
+      const btn = document.createElement("button");
+      btn.className = "slot-btn" + (s.available ? "" : " unavailable");
+      btn.textContent = formatTime(s.timeSlot);
+      btn.disabled = !s.available;
+      btn.onclick = () => selectSlot(s, btn);
+      grid.appendChild(btn);
+    });
+  } catch {
+    slotsSection.classList.add("hidden");
   }
 }
 
-async function deleteCurrentEvent() {
-  const id = document.getElementById("eventId").value;
-  if (!id || !confirm("Delete this event?")) return;
-  try {
-    await api("DELETE", `/events/${id}`);
-    toast("Event deleted");
-    closeModal();
-    render();
-  } catch (err) {
-    toast(err.message, true);
+function selectSlot(slot, btn) {
+  document.querySelectorAll(".slot-btn").forEach(b => b.classList.remove("selected"));
+  btn.classList.add("selected");
+  selectedSlot = slot;
+  updateConfirm();
+}
+
+function updateConfirm() {
+  const confirmDiv = document.getElementById("bookingConfirm");
+  const summary = document.getElementById("confirmSummary");
+  const serviceId = document.getElementById("servicePicker").value;
+  const serviceText = document.getElementById("servicePicker").selectedOptions[0]?.text;
+
+  if (selectedSlot && serviceId) {
+    confirmDiv.classList.remove("hidden");
+    summary.innerHTML = `
+      <strong>${serviceText}</strong><br>
+      ${formatDate(selectedSlot.date)} at ${formatTime(selectedSlot.timeSlot)}
+    `;
+  } else {
+    confirmDiv.classList.add("hidden");
   }
 }
 
-// ── API ───────────────────────────────────────────────────────────────────────
-async function fetchEvents(start, end) {
+async function confirmBooking() {
+  const serviceId = document.getElementById("servicePicker").value;
+  const notes = document.getElementById("bookingNotes").value;
+
+  if (!selectedSlot || !serviceId) return;
+
   try {
-    events = await api("GET", `/events?start=${start}&end=${end}`);
+    await api("POST", "/appointments", {
+      date:     selectedSlot.date,
+      timeSlot: selectedSlot.timeSlot,
+      service:  serviceId,
+      notes,
+    });
+    showToast("Appointment booked!");
+    selectedSlot = null;
+    document.getElementById("bookingConfirm").classList.add("hidden");
+    document.getElementById("bookingNotes").value = "";
+    document.querySelectorAll(".slot-btn").forEach(b => b.classList.remove("selected"));
+    loadSlots(document.getElementById("datePicker").value);
+    loadMyAppointments();
   } catch (err) {
-    toast("Failed to load events: " + err.message, true);
-    events = [];
+    showToast(err.message, true);
   }
 }
+
+// ── My Appointments ───────────────────────────────────────────────────────────
+
+async function loadMyAppointments() {
+  const list = document.getElementById("appointmentsList");
+  try {
+    const appts = await api("GET", "/appointments/me");
+    if (appts.length === 0) {
+      list.innerHTML = `<p class="muted">No upcoming appointments.</p>`;
+      return;
+    }
+
+    list.innerHTML = "";
+    appts
+      .sort((a, b) => (a.date + a.timeSlot).localeCompare(b.date + b.timeSlot))
+      .forEach(a => list.appendChild(appointmentCard(a)));
+  } catch {
+    list.innerHTML = `<p class="muted error">Could not load appointments.</p>`;
+  }
+}
+
+function appointmentCard(appt) {
+  const svc = appt.service.replace(/_/g, " ");
+  const isCancelled = appt.status === "cancelled";
+  const el = document.createElement("div");
+  el.className = "appt-card" + (isCancelled ? " cancelled" : "");
+  el.innerHTML = `
+    <div class="appt-info">
+      <div class="appt-datetime">${formatDate(appt.date)} &mdash; ${formatTime(appt.timeSlot)}</div>
+      <div class="appt-service">${capitalize(svc)}</div>
+      ${appt.notes ? `<div class="appt-notes">${appt.notes}</div>` : ""}
+    </div>
+    <div class="appt-actions">
+      <span class="appt-status ${appt.status}">${appt.status}</span>
+      ${!isCancelled ? `<button class="btn-danger-sm" data-id="${appt.id}">Cancel</button>` : ""}
+    </div>
+  `;
+  if (!isCancelled) {
+    el.querySelector("button").onclick = () => cancelAppointment(appt.id);
+  }
+  return el;
+}
+
+async function cancelAppointment(id) {
+  if (!confirm("Cancel this appointment?")) return;
+  try {
+    await api("PUT", `/appointments/${id}/cancel`);
+    showToast("Appointment cancelled");
+    loadMyAppointments();
+  } catch (err) {
+    showToast(err.message, true);
+  }
+}
+
+// ── API client ────────────────────────────────────────────────────────────────
 
 async function api(method, path, body) {
-  const opts = { method, headers: { "Content-Type": "application/json" } };
+  const opts = {
+    method,
+    headers: { "Content-Type": "application/json" },
+  };
+  const token = getToken();
+  if (token) opts.headers["Authorization"] = `Bearer ${token}`;
   if (body) opts.body = JSON.stringify(body);
-  const res = await fetch(API_URL + path, opts);
+
+  const res = await fetch(API + path, opts);
   if (res.status === 204) return null;
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || "Request failed");
@@ -319,19 +310,27 @@ async function api(method, path, body) {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-function fmt(d) { return d.toISOString().slice(0, 10); }
 
-function toLocalInput(iso) {
-  const d = new Date(iso);
-  const pad = n => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+function formatTime(t) {
+  const [h, m] = t.split(":").map(Number);
+  const ampm = h < 12 ? "AM" : "PM";
+  return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${ampm}`;
 }
 
-function toISO(localStr) { return new Date(localStr).toISOString(); }
+function formatDate(d) {
+  return new Date(d + "T12:00:00").toLocaleDateString("en-US", {
+    weekday: "short", month: "short", day: "numeric",
+  });
+}
 
-function toast(msg, isError = false) {
+function capitalize(s) {
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+function showToast(msg, isError = false) {
   const el = document.getElementById("toast");
   el.textContent = msg;
   el.className = "toast" + (isError ? " error" : "");
-  setTimeout(() => el.classList.add("hidden"), 3000);
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.classList.add("hidden"), 3500);
 }

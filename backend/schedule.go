@@ -1,0 +1,43 @@
+package main
+
+import (
+	"fmt"
+	"time"
+)
+
+// Customize shop hours here
+const (
+	openHour    = 9  // 9 AM
+	closeHour   = 17 // 5 PM
+	slotMinutes = 30
+)
+
+var openDays = map[time.Weekday]bool{
+	time.Monday:    true,
+	time.Tuesday:   true,
+	time.Wednesday: true,
+	time.Thursday:  true,
+	time.Friday:    true,
+	time.Saturday:  true,
+}
+
+// generateSlots returns all time slots for a given date based on shop hours.
+// Returns an empty slice for closed days.
+func generateSlots(date string) ([]string, error) {
+	d, err := time.Parse("2006-01-02", date)
+	if err != nil {
+		return nil, fmt.Errorf("invalid date format, expected YYYY-MM-DD")
+	}
+
+	if !openDays[d.Weekday()] {
+		return []string{}, nil
+	}
+
+	var slots []string
+	for h := openHour; h < closeHour; h++ {
+		for m := 0; m < 60; m += slotMinutes {
+			slots = append(slots, fmt.Sprintf("%02d:%02d", h, m))
+		}
+	}
+	return slots, nil
+}

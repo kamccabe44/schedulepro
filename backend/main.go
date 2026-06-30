@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"strings"
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
@@ -23,6 +24,35 @@ func init() {
 	tableName = os.Getenv("TABLE_NAME")
 }
 
+func handler(ctx context.Context, req events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error) {
+	method := req.RequestContext.HTTP.Method
+	path := req.RawPath
+
+	// /appointments/{id}/cancel — extract id from path manually
+	// (path params aren't populated on the $default catch-all route)
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+
+	switch {
+	case method == "GET" && path == "/slots":
+		return listSlots(ctx, req)
+
+	case method == "GET" && path == "/services":
+		return listServices()
+
+	case method == "POST" && path == "/appointments":
+		return bookAppointment(ctx, req)
+
+	case method == "GET" && path == "/appointments/me":
+		return myAppointments(ctx, req)
+
+	case method == "PUT" && len(parts) == 3 && parts[0] == "appointments" && parts[2] == "cancel":
+		return cancelAppointment(ctx, req, parts[1])
+
+	default:
+		return respond(404, map[string]string{"error": "not found"})
+	}
+}
+
 func respond(status int, body any) (events.APIGatewayV2HTTPResponse, error) {
 	b, _ := json.Marshal(body)
 	return events.APIGatewayV2HTTPResponse{
@@ -33,27 +63,6 @@ func respond(status int, body any) (events.APIGatewayV2HTTPResponse, error) {
 		},
 		Body: string(b),
 	}, nil
-}
-
-func handler(ctx context.Context, req events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error) {
-	method := req.RequestContext.HTTP.Method
-	path := req.RequestContext.HTTP.Path
-	id := req.PathParameters["id"]
-
-	switch {
-	case method == "GET" && path == "/events":
-		return listEvents(ctx, req)
-	case method == "POST" && path == "/events":
-		return createEvent(ctx, req)
-	case method == "GET" && id != "":
-		return getEvent(ctx, id)
-	case method == "PUT" && id != "":
-		return updateEvent(ctx, req, id)
-	case method == "DELETE" && id != "":
-		return deleteEvent(ctx, id)
-	default:
-		return respond(404, map[string]string{"error": "not found"})
-	}
 }
 
 func main() {
