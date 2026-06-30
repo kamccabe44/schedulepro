@@ -1,0 +1,144 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: SchedulePro - Minimal cost AWS scheduling application
+
+Globals:
+  Function:
+    Runtime: python3.12
+    Timeout: 30
+    MemorySize: 256
+    Environment:
+      Variables:
+        TABLE_NAME: !Ref EventsTable
+        CORS_ORIGIN: !Sub "http://${FrontendBucket}.s3-website-${AWS::Region}.amazonaws.com"
+
+Parameters:
+  AppName:
+    Type: String
+    Default: schedulepro
+    Description: Application name prefix for all resources
+
+Resources:
+  # ── API ──────────────────────────────────────────────────────────────────
+  Api:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      StageName: prod
+      CorsConfiguration:
+        AllowOrigins:
+          - "*"
+        AllowHeaders:
+          - Content-Type
+          - Authorization
+        AllowMethods:
+          - GET
+          - POST
+          - PUT
+          - DELETE
+          - OPTIONS
+
+  # ── Lambda ───────────────────────────────────────────────────────────────
+  ApiFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${AppName}-api"
+      CodeUri: backend/
+      Handler: app.handler
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref EventsTable
+      Events:
+        ListEvents:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref Api
+            Path: /events
+            Method: GET
+        CreateEvent:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref Api
+            Path: /events
+            Method: POST
+        GetEvent:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref Api
+            Path: /events/{id}
+            Method: GET
+        UpdateEvent:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref Api
+            Path: /events/{id}
+            Method: PUT
+        DeleteEvent:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref Api
+            Path: /events/{id}
+            Method: DELETE
+
+  # ── DynamoDB ─────────────────────────────────────────────────────────────
+  EventsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${AppName}-events"
+      BillingMode: PAY_PER_REQUEST   # on-demand — no provisioned cost
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+        - AttributeName: startDate
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: startDate-index
+          KeySchema:
+            - AttributeName: startDate
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+
+  # ── S3 frontend ──────────────────────────────────────────────────────────
+  FrontendBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${AppName}-frontend-${AWS::AccountId}"
+      WebsiteConfiguration:
+        IndexDocument: index.html
+        ErrorDocument: index.html
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false
+        BlockPublicPolicy: false
+        IgnorePublicAcls: false
+        RestrictPublicBuckets: false
+
+  FrontendBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref FrontendBucket
+      PolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal: "*"
+            Action: s3:GetObject
+            Resource: !Sub "${FrontendBucket.Arn}/*"
+
+Outputs:
+  ApiUrl:
+    Description: API Gateway endpoint
+    Value: !Sub "https://${Api}.execute-api.${AWS::Region}.amazonaws.com/prod"
+    Export:
+      Name: !Sub "${AppName}-ApiUrl"
+
+  FrontendUrl:
+    Description: S3 static website URL
+    Value: !Sub "http://${FrontendBucket}.s3-website-${AWS::Region}.amazonaws.com"
+    Export:
+      Name: !Sub "${AppName}-FrontendUrl"
+
+  TableName:
+    Description: DynamoDB table name
+    Value: !Ref EventsTable

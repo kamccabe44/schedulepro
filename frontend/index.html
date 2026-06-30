@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SchedulePro</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="app">
+    <header>
+      <div class="header-left">
+        <h1>SchedulePro</h1>
+      </div>
+      <div class="header-center">
+        <button id="prevBtn" class="nav-btn">&#8249;</button>
+        <span id="currentPeriod"></span>
+        <button id="nextBtn" class="nav-btn">&#8250;</button>
+        <button id="todayBtn" class="btn-secondary">Today</button>
+      </div>
+      <div class="header-right">
+        <select id="viewSelect">
+          <option value="month">Month</option>
+          <option value="week">Week</option>
+          <option value="day">Day</option>
+        </select>
+        <button id="newEventBtn" class="btn-primary">+ New Event</button>
+      </div>
+    </header>
+
+    <main id="calendarContainer"></main>
+  </div>
+
+  <!-- Event Modal -->
+  <div id="modal" class="modal hidden">
+    <div class="modal-backdrop" id="modalBackdrop"></div>
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h2 id="modalTitle">New Event</h2>
+        <button class="close-btn" id="closeModal">&times;</button>
+      </div>
+      <form id="eventForm">
+        <input type="hidden" id="eventId" />
+        <div class="form-group">
+          <label for="title">Title *</label>
+          <input type="text" id="title" required placeholder="Event title" />
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="startTime">Start *</label>
+            <input type="datetime-local" id="startTime" required />
+          </div>
+          <div class="form-group">
+            <label for="endTime">End *</label>
+            <input type="datetime-local" id="endTime" required />
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="location">Location</label>
+          <input type="text" id="location" placeholder="Optional location" />
+        </div>
+        <div class="form-group">
+          <label for="description">Description</label>
+          <textarea id="description" rows="3" placeholder="Optional notes"></textarea>
+        </div>
+        <div class="form-group">
+          <label for="color">Color</label>
+          <div class="color-options" id="colorOptions">
+            <button type="button" class="color-swatch active" data-color="#3b82f6" style="background:#3b82f6"></button>
+            <button type="button" class="color-swatch" data-color="#10b981" style="background:#10b981"></button>
+            <button type="button" class="color-swatch" data-color="#f59e0b" style="background:#f59e0b"></button>
+            <button type="button" class="color-swatch" data-color="#ef4444" style="background:#ef4444"></button>
+            <button type="button" class="color-swatch" data-color="#8b5cf6" style="background:#8b5cf6"></button>
+            <button type="button" class="color-swatch" data-color="#ec4899" style="background:#ec4899"></button>
+          </div>
+          <input type="hidden" id="color" value="#3b82f6" />
+        </div>
+        <div class="form-actions">
+          <button type="button" id="deleteEventBtn" class="btn-danger hidden">Delete</button>
+          <div class="form-actions-right">
+            <button type="button" id="cancelBtn" class="btn-secondary">Cancel</button>
+            <button type="submit" class="btn-primary">Save</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
