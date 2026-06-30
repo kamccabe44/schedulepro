@@ -18,3 +18,4 @@ resource "aws_dynamodb_table" "events" {
     hash_key           = "startDate"
     projection_type    = "ALL"
   }
+}

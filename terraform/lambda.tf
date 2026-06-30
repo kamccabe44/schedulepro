@@ -1,13 +1,13 @@
 data "archive_file" "lambda_zip" {
     type        = "zip"
-    source_dir  = "${path.module}/../backend"
+    source_file = "${path.module}/../backend/bootstrap"
     output_path = "${path.module}/../.terraform/lambda.zip"
 }
 
 resource "aws_iam_role" "lambda" {
     name = "${var.app_name}-lambda-role"
 
-    assume_role_policy = jsonencode({{
+    assume_role_policy = jsonencode({
         Version = "2012-10-17"
         Statement = [
             {
@@ -18,7 +18,7 @@ resource "aws_iam_role" "lambda" {
                 }
             }
         ]
-    }})
+    })
 }
 
 resource "aws_iam_role_policy_attachment" "lambda_logs" {
@@ -55,8 +55,8 @@ resource "aws_iam_role_policy" "lambda_dynamo" {
 resource "aws_lambda_function" "api" {
     function_name = "${var.app_name}-api"
     role             = aws_iam_role.lambda.arn
-    handler          = "app.handler"
-    runtime          = "python3.14"
+    handler          = "bootstrap"
+    runtime          = "provided.al2023"
     filename         = data.archive_file.lambda_zip.output_path
     source_code_hash = data.archive_file.lambda_zip.output_base64sha256
     timeout          = 30
@@ -64,7 +64,7 @@ resource "aws_lambda_function" "api" {
 
     environment {
         variables = {
-            DYNAMODB_TABLE_NAME = aws_dynamodb_table.events.name
+            TABLE_NAME = aws_dynamodb_table.events.name
         }
     }
 }
@@ -74,5 +74,5 @@ resource "aws_lambda_permission" "api_gateway" {
     action        = "lambda:InvokeFunction"
     function_name = aws_lambda_function.api.function_name
     principal     = "apigateway.amazonaws.com"
-    source_arn    = "${aws_apigatewayv2_api.main.execution_arn}/*/*"
+    source_arn    = "${aws_apigatewayv2_api.http_api.execution_arn}/*/*"
 }

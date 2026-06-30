@@ -5,6 +5,18 @@ resource "aws_s3_bucket" "frontend" {
 resource "aws_s3_bucket_website_configuration" "frontend" {
     bucket = aws_s3_bucket.frontend.id
 
+    index_document {
+        suffix = "index.html"
+    }
+
+    error_document {
+        key = "index.html"
+    }
+}
+
+resource "aws_s3_bucket_public_access_block" "frontend" {
+    bucket = aws_s3_bucket.frontend.id
+
     block_public_acls       = false
     block_public_policy     = false
     ignore_public_acls      = false
@@ -12,7 +24,7 @@ resource "aws_s3_bucket_website_configuration" "frontend" {
 }
 
 resource "aws_s3_bucket_policy" "frontend" {
-    bucket = aws_s3_bucket.frontend.id 
+    bucket = aws_s3_bucket.frontend.id
     depends_on = [aws_s3_bucket_public_access_block.frontend]
 
     policy = jsonencode({
