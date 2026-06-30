@@ -277,3 +277,31 @@ func claimsFromRequest(req events.APIGatewayV2HTTPRequest) (userID, email, name 
 	}
 	return
 }
+
+// userGroups returns the Cognito groups the caller belongs to.
+// API Gateway serialises the cognito:groups array claim as a JSON array string.
+func userGroups(req events.APIGatewayV2HTTPRequest) map[string]bool {
+	raw := req.RequestContext.Authorizer.JWT.Claims["cognito:groups"]
+	groups := map[string]bool{}
+	var list []string
+	if err := json.Unmarshal([]byte(raw), &list); err == nil {
+		for _, g := range list {
+			groups[g] = true
+		}
+	} else {
+		// Fallback: space-separated string
+		for _, g := range strings.Fields(raw) {
+			groups[g] = true
+		}
+	}
+	return groups
+}
+
+func isBarberOrAdmin(req events.APIGatewayV2HTTPRequest) bool {
+	g := userGroups(req)
+	return g["barbers"] || g["admins"]
+}
+
+func isAdmin(req events.APIGatewayV2HTTPRequest) bool {
+	return userGroups(req)["admins"]
+}

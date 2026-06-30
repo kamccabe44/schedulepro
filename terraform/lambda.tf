@@ -28,21 +28,34 @@ resource "aws_iam_role_policy" "lambda_dynamo" {
 
   policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [{
-      Effect = "Allow"
-      Action = [
-        "dynamodb:PutItem",
-        "dynamodb:GetItem",
-        "dynamodb:UpdateItem",
-        "dynamodb:DeleteItem",
-        "dynamodb:Query",
-        "dynamodb:Scan",
-      ]
-      Resource = [
-        aws_dynamodb_table.appointments.arn,
-        "${aws_dynamodb_table.appointments.arn}/index/*",
-      ]
-    }]
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "dynamodb:PutItem",
+          "dynamodb:GetItem",
+          "dynamodb:UpdateItem",
+          "dynamodb:DeleteItem",
+          "dynamodb:Query",
+          "dynamodb:Scan",
+        ]
+        Resource = [
+          aws_dynamodb_table.appointments.arn,
+          "${aws_dynamodb_table.appointments.arn}/index/*",
+        ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "cognito-idp:ListUsers",
+          "cognito-idp:ListUsersInGroup",
+          "cognito-idp:AdminAddUserToGroup",
+          "cognito-idp:AdminRemoveUserFromGroup",
+          "cognito-idp:AdminGetUser",
+        ]
+        Resource = aws_cognito_user_pool.main.arn
+      }
+    ]
   })
 }
 
@@ -58,8 +71,9 @@ resource "aws_lambda_function" "api" {
 
   environment {
     variables = {
-      TABLE_NAME  = aws_dynamodb_table.appointments.name
-      STAGE_NAME  = aws_apigatewayv2_stage.prod.name
+      TABLE_NAME   = aws_dynamodb_table.appointments.name
+      STAGE_NAME   = aws_apigatewayv2_stage.prod.name
+      USER_POOL_ID = aws_cognito_user_pool.main.id
     }
   }
 }

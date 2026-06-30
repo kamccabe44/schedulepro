@@ -18,13 +18,14 @@
     <div id="authArea">
       <button id="loginBtn" class="btn-primary">Sign In / Create Account</button>
       <div id="userMenu" class="hidden">
+        <span id="userBadge"></span>
         <span id="userName"></span>
         <button id="logoutBtn" class="btn-ghost">Sign Out</button>
       </div>
     </div>
   </header>
 
-  <!-- Shown when logged out -->
+  <!-- Logged out hero -->
   <section id="hero" class="hidden">
     <div class="hero-content">
       <h1>Book your next haircut online</h1>
@@ -33,14 +34,20 @@
     </div>
   </section>
 
-  <!-- Shown when logged in -->
+  <!-- Tab nav (shown when logged in) -->
+  <nav id="tabNav" class="tab-nav hidden">
+    <button class="tab-btn active" data-tab="book">Book</button>
+    <button class="tab-btn" data-tab="my-appts">My Appointments</button>
+    <button class="tab-btn barber-tab hidden" data-tab="schedule">Day Schedule</button>
+    <button class="tab-btn admin-tab hidden" data-tab="staff">Manage Staff</button>
+  </nav>
+
   <main id="app" class="hidden">
     <div class="container">
 
-      <!-- Booking panel -->
-      <section class="card" id="bookingPanel">
+      <!-- ── Customer: Book ── -->
+      <section id="tab-book" class="tab-panel card">
         <h2>Book an Appointment</h2>
-
         <div class="form-row">
           <div class="form-group">
             <label for="datePicker">Select a date</label>
@@ -53,12 +60,10 @@
             </select>
           </div>
         </div>
-
         <div id="slotsSection" class="hidden">
           <label>Available times</label>
           <div id="slotsGrid" class="slots-grid"></div>
         </div>
-
         <div id="bookingConfirm" class="hidden">
           <div class="confirm-summary" id="confirmSummary"></div>
           <div class="form-group">
@@ -69,10 +74,35 @@
         </div>
       </section>
 
-      <!-- My appointments -->
-      <section class="card" id="appointmentsPanel">
+      <!-- ── Customer: My Appointments ── -->
+      <section id="tab-my-appts" class="tab-panel card hidden">
         <h2>My Upcoming Appointments</h2>
         <div id="appointmentsList"><p class="muted">Loading...</p></div>
+      </section>
+
+      <!-- ── Barber: Day Schedule ── -->
+      <section id="tab-schedule" class="tab-panel card hidden">
+        <h2>Day Schedule</h2>
+        <div class="form-group" style="max-width:200px">
+          <label for="schedDatePicker">Date</label>
+          <input type="date" id="schedDatePicker" />
+        </div>
+        <div id="scheduleList"><p class="muted">Select a date above.</p></div>
+      </section>
+
+      <!-- ── Admin: Manage Staff ── -->
+      <section id="tab-staff" class="tab-panel card hidden">
+        <h2>Manage Staff</h2>
+
+        <div class="form-group" style="max-width:360px">
+          <label>Add a barber by email</label>
+          <div class="input-row">
+            <input type="email" id="addBarberEmail" placeholder="barber@email.com" />
+            <button id="addBarberBtn" class="btn-primary">Add</button>
+          </div>
+        </div>
+
+        <div id="barbersList"><p class="muted">Loading staff...</p></div>
       </section>
 
     </div>
