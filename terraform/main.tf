@@ -15,6 +15,7 @@ provider "aws" {
   default_tags {
     tags = {
       Application = var.app_name
+      Customer    = var.customer_name
       Environment = var.environment
       ManagedBy   = "terraform"
     }
@@ -29,6 +30,7 @@ provider "aws" {
   default_tags {
     tags = {
       Application = var.app_name
+      Customer    = var.customer_name
       Environment = var.environment
       ManagedBy   = "terraform"
     }

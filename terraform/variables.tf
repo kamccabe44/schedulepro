@@ -15,3 +15,8 @@ variable "environment" {
   type        = string
   default     = "production"
 }
+
+variable "customer_name" {
+  description = "Name of the customer this deployment belongs to, used for cost allocation tagging"
+  type        = string
+}

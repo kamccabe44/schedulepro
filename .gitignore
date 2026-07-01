@@ -14,3 +14,6 @@ backend/schedulepro
 terraform/.terraform/
 terraform/terraform.tfstate
 terraform/terraform.tfstate.backup
+
+# Per-deployment customer config (differs per customer, not committed)
+terraform/terraform.tfvars
