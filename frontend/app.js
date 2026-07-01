@@ -56,7 +56,7 @@ async function handleCallback(code) {
   initApp();
 }
 
-function getToken() { return sessionStorage.getItem("access_token"); }
+function getToken() { return sessionStorage.getItem("id_token"); }
 
 function logout() {
   sessionStorage.clear();
