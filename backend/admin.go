@@ -145,3 +145,28 @@ func removeBarber(ctx context.Context, req events.APIGatewayV2HTTPRequest, userI
 
 	return respond(200, map[string]string{"message": "barber removed"})
 }
+
+func listBarbersPublic(ctx context.Context, req events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error) {
+	out, err := cognitoClient.ListUsersInGroup(ctx, &cognitoidentityprovider.ListUsersInGroupInput{
+		UserPoolId: &userPoolID,
+		GroupName:  aws.String("barbers"),
+	})
+	if err != nil {
+		return respond(500, map[string]string{"error": err.Error()})
+	}
+
+	barbers := make([]BarberUser, 0, len(out.Users))
+	for _, u := range out.Users {
+		b := BarberUser{UserID: aws.ToString(u.Username)}
+		for _, attr := range u.Attributes {
+			switch aws.ToString(attr.Name) {
+			case "email":
+				b.Email = aws.ToString(attr.Value)
+			case "name":
+				b.Name = aws.ToString(attr.Value)
+			}
+		}
+		barbers = append(barbers, b)
+	}
+	return respond(200, barbers)
+}

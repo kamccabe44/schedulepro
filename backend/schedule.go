@@ -8,7 +8,7 @@ import (
 // Customize shop hours here
 const (
 	openHour    = 17 // 5 PM
-	openMinute  = 0
+	openMinute  = 15
 	closeHour   = 21 // 9 PM
 	closeMinute = 0
 	slotMinutes = 30
