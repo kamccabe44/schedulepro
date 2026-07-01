@@ -289,9 +289,13 @@ func userGroups(req events.APIGatewayV2HTTPRequest) map[string]bool {
 			groups[g] = true
 		}
 	} else {
-		// Fallback: space-separated string
-		for _, g := range strings.Fields(raw) {
-			groups[g] = true
+		// API Gateway serialises Cognito group arrays as [val1 val2] (no quotes).
+		// Strip the surrounding brackets, then split on whitespace or commas.
+		raw = strings.Trim(raw, "[]")
+		for _, g := range strings.FieldsFunc(raw, func(r rune) bool { return r == ',' || r == ' ' }) {
+			if g = strings.TrimSpace(g); g != "" {
+				groups[g] = true
+			}
 		}
 	}
 	return groups
