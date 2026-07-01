@@ -9,3 +9,9 @@ variable "region" {
     type        = string
     default     = "us-east-1"
 }
+
+variable "environment" {
+  description = "Deployment environment, used for cost allocation tagging"
+  type        = string
+  default     = "production"
+}
