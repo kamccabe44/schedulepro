@@ -9,3 +9,8 @@ node_modules/
 backend/bootstrap
 backend/schedulepro
 *.zip
+
+# Terraform
+terraform/.terraform/
+terraform/terraform.tfstate
+terraform/terraform.tfstate.backup
