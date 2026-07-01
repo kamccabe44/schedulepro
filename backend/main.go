@@ -14,11 +14,11 @@ import (
 )
 
 var (
-	db           *dynamodb.Client
+	db            *dynamodb.Client
 	cognitoClient *cognitoidentityprovider.Client
-	tableName    string
-	stageName    string
-	userPoolID   string
+	tableName     string
+	stageName     string
+	userPoolID    string
 )
 
 func init() {
@@ -60,6 +60,8 @@ func handler(ctx context.Context, req events.APIGatewayV2HTTPRequest) (events.AP
 		return bookAppointment(ctx, req)
 	case method == "GET" && path == "/appointments/me":
 		return myAppointments(ctx, req)
+	case method == "GET" && path == "/barbers":
+		return listBarbersPublic(ctx, req)
 	case method == "PUT" && len(parts) == 3 && parts[0] == "appointments" && parts[2] == "cancel":
 		return cancelAppointment(ctx, req, parts[1])
 

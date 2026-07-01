@@ -152,9 +152,19 @@ let selectedSlot = null;
 async function setupBookingForm() {
   const today = new Date().toISOString().slice(0, 10);
   const picker = document.getElementById("datePicker");
+  const barbers = await api("GET", "/barbers");
+  const barberSel = document.getElementById("barberPicker");
   picker.min = today;
   picker.value = today;
   picker.onchange = () => { selectedSlot = null; document.getElementById("bookingConfirm").classList.add("hidden"); loadSlots(picker.value); };
+
+  barbers.forEach(b => {
+    const opt = document.createElement("option:");
+    opt.value = b.userId;
+    opt.dataset.name = b.name || b.email;
+    opt.textContent = b.name || b.email;
+    barberSel.appendChild(opt);
+  });
 
   try {
     const svcs = await api("GET", "/services");
@@ -213,6 +223,9 @@ function updateConfirm() {
 async function confirmBooking() {
   const serviceId = document.getElementById("servicePicker").value;
   const notes = document.getElementById("bookingNotes").value;
+  const barberOpt = document.getElementById("barberPicker").selectedOptions[0];
+  const barberId = barberOpt?.value || "";
+  const barberName = barberOpt?.dataset.name || "";
   if (!selectedSlot || !serviceId) return;
   try {
     await api("POST", "/appointments", { date: selectedSlot.date, timeSlot: selectedSlot.timeSlot, service: serviceId, notes });
@@ -224,9 +237,17 @@ async function confirmBooking() {
     loadSlots(document.getElementById("datePicker").value);
     loadMyAppointments();
   } catch (err) { showToast(err.message, true); }
-}
 
-// ── My Appointments ───────────────────────────────────────────────────────────
+  await api("POST", "/appointments", {
+    date: selectedSlot.date,
+    timeSlot: selectedSlot.timeSlot,
+    service: serviceId,
+    notes,
+    barberId,
+    barberName
+  });
+
+  // ── My Appointments ───────────────────────────────────────────────────────────
 
 async function loadMyAppointments() {
   const list = document.getElementById("appointmentsList");
