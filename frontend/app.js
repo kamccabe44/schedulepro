@@ -227,21 +227,21 @@ async function confirmBooking() {
   const barberName = barberOpt?.dataset.name || "";
   if (!selectedSlot || !serviceId) return;
   try {
-  await api("POST", "/appointments", {
-    date: selectedSlot.date,
-    timeSlot: selectedSlot.timeSlot,
-    service: serviceId,
-    notes,
-    barberId,
-    barberName
-  });
-  showToast("Appointment booked!");
-  selectedSlot = null;
-  document.getElementById("bookingConfirm").classList.add("hidden");
-  document.getElementById("bookingNotes").value = "";
-  document.querySelectorAll(".slot-btn").forEach(b => b.classList.remove("selected"));
-  loadSlots(document.getElementById("datePicker").value);
-  loadMyAppointments();
+    await api("POST", "/appointments", {
+      date: selectedSlot.date,
+      timeSlot: selectedSlot.timeSlot,
+      service: serviceId,
+      notes,
+      barberId,
+      barberName
+    });
+    showToast("Appointment booked!");
+    selectedSlot = null;
+    document.getElementById("bookingConfirm").classList.add("hidden");
+    document.getElementById("bookingNotes").value = "";
+    document.querySelectorAll(".slot-btn").forEach(b => b.classList.remove("selected"));
+    loadSlots(document.getElementById("datePicker").value);
+    loadMyAppointments();
   } catch (err) { showToast(err.message, true); }
 }
 
