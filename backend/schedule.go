@@ -8,7 +8,9 @@ import (
 // Customize shop hours here
 const (
 	openHour    = 17 // 5 PM
+	openMinute  = 0
 	closeHour   = 21 // 9 PM
+	closeMinute = 0
 	slotMinutes = 30
 )
 
@@ -34,10 +36,10 @@ func generateSlots(date string) ([]string, error) {
 	}
 
 	var slots []string
-	for h := openHour; h < closeHour; h++ {
-		for m := 0; m < 60; m += slotMinutes {
-			slots = append(slots, fmt.Sprintf("%02d:%02d", h, m))
-		}
+	open := openHour*60 + openMinute
+	close := closeHour*60 + closeMinute
+	for t := open; t < close; t += slotMinutes {
+		slots = append(slots, fmt.Sprintf("%02d:%02d", t/60, t%60))
 	}
 	return slots, nil
 }
