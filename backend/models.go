@@ -47,11 +47,13 @@ type BarberService struct {
 	Price    string `json:"price"    dynamodbav:"price"`
 }
 
-// BarberSettings holds a barber's full schedule and service list.
+// BarberSettings holds a barber's full schedule, service list, and payment handles.
 type BarberSettings struct {
-	BarberID string                 `json:"barberId"  dynamodbav:"barberId"`
-	Schedule map[string]DaySchedule `json:"schedule"  dynamodbav:"schedule"`  // key = "Monday" etc.
-	Services []BarberService        `json:"services"  dynamodbav:"services"`
+	BarberID      string                 `json:"barberId"      dynamodbav:"barberId"`
+	Schedule      map[string]DaySchedule `json:"schedule"      dynamodbav:"schedule"`  // key = "Monday" etc.
+	Services      []BarberService        `json:"services"      dynamodbav:"services"`
+	VenmoHandle   string                 `json:"venmoHandle"   dynamodbav:"venmoHandle"`
+	CashAppHandle string                 `json:"cashAppHandle" dynamodbav:"cashAppHandle"`
 }
 
 var services = map[string]Service{

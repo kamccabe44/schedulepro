@@ -265,6 +265,13 @@ async function confirmBooking() {
     document.querySelectorAll(".slot-btn").forEach(b => b.classList.remove("selected"));
     loadSlots(document.getElementById("datePicker").value, barberId);
     loadMyAppointments();
+    // Show payment QR if barber has handles configured
+    try {
+      const settings = await api("GET", `/barbers/${barberId}/settings`);
+      if (settings.venmoHandle || settings.cashAppHandle) {
+        showPaymentQR(barberName, settings.venmoHandle, settings.cashAppHandle);
+      }
+    } catch { /* non-critical, skip */ }
   } catch (err) { showToast(err.message, true); }
 }
 
@@ -381,6 +388,9 @@ async function setupSettingsPanel() {
     // Populate services
     settingsServices = settings.services || [];
     renderServiceRows();
+    // Populate payment handles
+    document.getElementById("venmoHandle").value = settings.venmoHandle || "";
+    document.getElementById("cashAppHandle").value = settings.cashAppHandle || "";
   } catch { showToast("Could not load your settings", true); }
 }
 
@@ -428,8 +438,10 @@ async function saveSettings() {
     const [closeHour, closeMinute] = document.getElementById(`close-time-${day}`).value.split(":").map(Number);
     schedule[day] = { open, openHour, openMinute, closeHour, closeMinute };
   });
+  const venmoHandle = document.getElementById("venmoHandle").value.trim();
+  const cashAppHandle = document.getElementById("cashAppHandle").value.trim();
   try {
-    await api("PUT", "/barbers/me/settings", { schedule, services: settingsServices });
+    await api("PUT", "/barbers/me/settings", { schedule, services: settingsServices, venmoHandle, cashAppHandle });
     showToast("Settings saved!");
   } catch (err) { showToast(err.message, true); }
 }
@@ -480,6 +492,41 @@ async function removeBarber(userId, email) {
     showToast("Barber removed");
     loadBarbers();
   } catch (err) { showToast(err.message, true); }
+}
+
+// ── Payment QR modal ──────────────────────────────────────────────────────────
+
+function showPaymentQR(barberName, venmoHandle, cashAppHandle) {
+  const modal = document.getElementById("qrModal");
+  const codesDiv = document.getElementById("qrModalCodes");
+  document.getElementById("qrModalTitle").textContent = `Pay ${barberName}`;
+  codesDiv.innerHTML = "";
+
+  function makeQR(label, url) {
+    const wrap = document.createElement("div");
+    wrap.className = "qr-code-wrap";
+    const lbl = document.createElement("div");
+    lbl.className = "qr-label";
+    lbl.textContent = label;
+    const canvas = document.createElement("div");
+    wrap.appendChild(lbl);
+    wrap.appendChild(canvas);
+    codesDiv.appendChild(wrap);
+    new QRCode(canvas, { text: url, width: 180, height: 180, correctLevel: QRCode.CorrectLevel.M });
+  }
+
+  if (venmoHandle) {
+    const handle = venmoHandle.replace(/^@/, "");
+    makeQR(`Venmo — @${handle}`, `https://venmo.com/${handle}`);
+  }
+  if (cashAppHandle) {
+    const tag = cashAppHandle.startsWith("$") ? cashAppHandle : `$${cashAppHandle}`;
+    makeQR(`Cash App — ${tag}`, `https://cash.app/${tag}`);
+  }
+
+  modal.classList.remove("hidden");
+  document.getElementById("qrModalClose").onclick = () => modal.classList.add("hidden");
+  modal.onclick = (e) => { if (e.target === modal) modal.classList.add("hidden"); };
 }
 
 // ── API client ────────────────────────────────────────────────────────────────
