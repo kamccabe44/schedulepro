@@ -16,6 +16,7 @@
       </div>
     </div>
     <div id="authArea">
+      <button id="shareQrBtn" class="btn-ghost" title="Share this site">Share site</button>
       <button id="loginBtn" class="btn-primary">Sign In / Create Account</button>
       <div id="userMenu" class="hidden">
         <span id="userBadge"></span>
@@ -24,6 +25,21 @@
       </div>
     </div>
   </header>
+
+  <!-- Site QR modal -->
+  <div id="siteQrModal" class="qr-modal hidden">
+    <div class="qr-modal-box">
+      <h3>Share The Chair</h3>
+      <p class="muted" style="margin-bottom:1.25rem">Scan to open the booking page</p>
+      <div id="siteQrCode"></div>
+      <p id="siteQrUrl" style="margin-top:1rem;font-size:.8rem;color:var(--text-muted)"></p>
+      <div style="display:flex;gap:.75rem;justify-content:center;margin-top:1.25rem;flex-wrap:wrap">
+        <button id="siteQrDownload" class="btn-primary">Download QR</button>
+        <button id="siteQrShare" class="btn-ghost" style="display:none">Share…</button>
+        <button id="siteQrClose" class="btn-ghost">Close</button>
+      </div>
+    </div>
+  </div>
 
   <!-- Logged out hero -->
   <section id="hero" class="hidden">

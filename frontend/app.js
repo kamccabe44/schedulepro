@@ -85,6 +85,7 @@ function isAdmin() { return getUserGroups().includes("admins"); }
 // ── Init ──────────────────────────────────────────────────────────────────────
 
 document.addEventListener("DOMContentLoaded", async () => {
+  setupSiteQr();
   const code = new URLSearchParams(window.location.search).get("code");
   if (code) { await handleCallback(code); return; }
   if (getToken()) { initApp(); } else { showLoggedOut(); }
@@ -492,6 +493,52 @@ async function removeBarber(userId, email) {
     showToast("Barber removed");
     loadBarbers();
   } catch (err) { showToast(err.message, true); }
+}
+
+// ── Site QR code ──────────────────────────────────────────────────────────────
+
+function setupSiteQr() {
+  const url = window.location.origin + window.location.pathname.replace(/\/$/, "");
+  let qrRendered = false;
+
+  document.getElementById("shareQrBtn").onclick = () => {
+    const modal = document.getElementById("siteQrModal");
+    modal.classList.remove("hidden");
+    document.getElementById("siteQrUrl").textContent = url;
+
+    if (!qrRendered) {
+      new QRCode(document.getElementById("siteQrCode"), {
+        text: url,
+        width: 200,
+        height: 200,
+        correctLevel: QRCode.CorrectLevel.M,
+      });
+      qrRendered = true;
+    }
+
+    // Show native share button if supported (works great on mobile)
+    if (navigator.share) {
+      const btn = document.getElementById("siteQrShare");
+      btn.style.display = "";
+      btn.onclick = () => navigator.share({ title: "The Chair — Book a Haircut", url });
+    }
+  };
+
+  document.getElementById("siteQrClose").onclick = () =>
+    document.getElementById("siteQrModal").classList.add("hidden");
+  document.getElementById("siteQrModal").onclick = (e) => {
+    if (e.target === document.getElementById("siteQrModal"))
+      document.getElementById("siteQrModal").classList.add("hidden");
+  };
+
+  document.getElementById("siteQrDownload").onclick = () => {
+    const canvas = document.querySelector("#siteQrCode canvas");
+    if (!canvas) return;
+    const a = document.createElement("a");
+    a.href = canvas.toDataURL("image/png");
+    a.download = "the-chair-qr.png";
+    a.click();
+  };
 }
 
 // ── Payment QR modal ──────────────────────────────────────────────────────────
