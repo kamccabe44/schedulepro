@@ -8,3 +8,4 @@ samconfig.toml.local
 node_modules/
 backend/bootstrap
 backend/schedulepro
+*.zip
