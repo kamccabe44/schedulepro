@@ -376,6 +376,7 @@ async function api(method, path, body) {
   if (token) opts.headers["Authorization"] = `Bearer ${token}`;
   if (body) opts.body = JSON.stringify(body);
   const res = await fetch(API + path, opts);
+  if (res.status === 401) { sessionStorage.clear(); showLoggedOut(); throw new Error("Session expired. Please sign in again."); }
   if (res.status === 204) return null;
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || "Request failed");
