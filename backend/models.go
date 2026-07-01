@@ -3,16 +3,18 @@ package main
 import "time"
 
 type Appointment struct {
-	ID        string    `json:"id"        dynamodbav:"id"`
-	UserID    string    `json:"userId"    dynamodbav:"userId"`
-	UserEmail string    `json:"userEmail" dynamodbav:"userEmail"`
-	UserName  string    `json:"userName"  dynamodbav:"userName"`
-	Date      string    `json:"date"      dynamodbav:"date"`     // YYYY-MM-DD
-	TimeSlot  string    `json:"timeSlot"  dynamodbav:"timeSlot"` // HH:MM
-	Service   string    `json:"service"   dynamodbav:"service"`
-	Status    string    `json:"status"    dynamodbav:"status"` // booked | cancelled
-	Notes     string    `json:"notes"     dynamodbav:"notes"`
-	CreatedAt time.Time `json:"createdAt" dynamodbav:"createdAt"`
+	ID         string    `json:"id"        dynamodbav:"id"`
+	UserID     string    `json:"userId"    dynamodbav:"userId"`
+	UserEmail  string    `json:"userEmail" dynamodbav:"userEmail"`
+	UserName   string    `json:"userName"  dynamodbav:"userName"`
+	Date       string    `json:"date"      dynamodbav:"date"`     // YYYY-MM-DD
+	TimeSlot   string    `json:"timeSlot"  dynamodbav:"timeSlot"` // HH:MM
+	Service    string    `json:"service"   dynamodbav:"service"`
+	Status     string    `json:"status"    dynamodbav:"status"` // booked | cancelled
+	BarberID   string    `json:"barberId"  dynamodbav:"barberId"`
+	BarberName string    `json:"barberName" dynamodbav:"barberName"`
+	Notes      string    `json:"notes"     dynamodbav:"notes"`
+	CreatedAt  time.Time `json:"createdAt" dynamodbav:"createdAt"`
 }
 
 type SlotResponse struct {

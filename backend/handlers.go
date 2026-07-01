@@ -83,10 +83,12 @@ func bookAppointment(ctx context.Context, req events.APIGatewayV2HTTPRequest) (e
 	}
 
 	var body struct {
-		Date     string `json:"date"`
-		TimeSlot string `json:"timeSlot"`
-		Service  string `json:"service"`
-		Notes    string `json:"notes"`
+		Date       string `json:"date"`
+		TimeSlot   string `json:"timeSlot"`
+		Service    string `json:"service"`
+		Notes      string `json:"notes"`
+		BarberID   string `json:"barberId"`
+		BarberName string `json:"barberName"`
 	}
 	if err := json.Unmarshal([]byte(req.Body), &body); err != nil {
 		return respond(400, map[string]string{"error": "invalid request body"})
@@ -140,16 +142,18 @@ func bookAppointment(ctx context.Context, req events.APIGatewayV2HTTPRequest) (e
 	}
 
 	appt := Appointment{
-		ID:        uuid.New().String(),
-		UserID:    userID,
-		UserEmail: userEmail,
-		UserName:  userName,
-		Date:      body.Date,
-		TimeSlot:  body.TimeSlot,
-		Service:   body.Service,
-		Status:    "booked",
-		Notes:     body.Notes,
-		CreatedAt: time.Now().UTC(),
+		ID:         uuid.New().String(),
+		UserID:     userID,
+		UserEmail:  userEmail,
+		UserName:   userName,
+		Date:       body.Date,
+		TimeSlot:   body.TimeSlot,
+		Service:    body.Service,
+		Status:     "booked",
+		Notes:      body.Notes,
+		BarberID:   body.BarberID,
+		BarberName: body.BarberName,
+		CreatedAt:  time.Now().UTC(),
 	}
 
 	item, err := attributevalue.MarshalMap(appt)

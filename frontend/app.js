@@ -152,11 +152,20 @@ let selectedSlot = null;
 async function setupBookingForm() {
   const today = new Date().toISOString().slice(0, 10);
   const picker = document.getElementById("datePicker");
+  const barberSel = document.getElementById("barberPicker");
   picker.min = today;
   picker.value = today;
   picker.onchange = () => { selectedSlot = null; document.getElementById("bookingConfirm").classList.add("hidden"); loadSlots(picker.value); };
 
   try {
+    const barbers = await api("GET", "/barbers");
+    barbers.forEach(b => {
+      const opt = document.createElement("option");
+      opt.value = b.userId;
+      opt.dataset.name = b.name || b.email;
+      opt.textContent = b.name || b.email;
+      barberSel.appendChild(opt);
+    })
     const svcs = await api("GET", "/services");
     const sel = document.getElementById("servicePicker");
     svcs.sort((a, b) => a.name.localeCompare(b.name)).forEach(s => {
@@ -213,9 +222,19 @@ function updateConfirm() {
 async function confirmBooking() {
   const serviceId = document.getElementById("servicePicker").value;
   const notes = document.getElementById("bookingNotes").value;
+  const barberOpt = document.getElementById("barberPicker").selectedOptions[0];
+  const barberId = barberOpt?.value || "";
+  const barberName = barberOpt?.dataset.name || "";
   if (!selectedSlot || !serviceId) return;
   try {
-    await api("POST", "/appointments", { date: selectedSlot.date, timeSlot: selectedSlot.timeSlot, service: serviceId, notes });
+    await api("POST", "/appointments", {
+      date: selectedSlot.date,
+      timeSlot: selectedSlot.timeSlot,
+      service: serviceId,
+      notes,
+      barberId,
+      barberName
+    });
     showToast("Appointment booked!");
     selectedSlot = null;
     document.getElementById("bookingConfirm").classList.add("hidden");
@@ -226,7 +245,8 @@ async function confirmBooking() {
   } catch (err) { showToast(err.message, true); }
 }
 
-// ── My Appointments ───────────────────────────────────────────────────────────
+
+  // ── My Appointments ───────────────────────────────────────────────────────────
 
 async function loadMyAppointments() {
   const list = document.getElementById("appointmentsList");
