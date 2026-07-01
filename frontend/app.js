@@ -520,7 +520,7 @@ function setupSiteQr() {
     if (navigator.share) {
       const btn = document.getElementById("siteQrShare");
       btn.style.display = "";
-      btn.onclick = () => navigator.share({ title: "The Chair — Book a Haircut", url });
+      btn.onclick = () => navigator.share({ title: "CutsByBren — Book a Haircut", url });
     }
   };
 
