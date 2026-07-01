@@ -84,7 +84,15 @@ function isAdmin() { return getUserGroups().includes("admins"); }
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 
+function applyBranding() {
+  const name = CFG.siteName || "Book a Haircut";
+  document.getElementById("pageTitle").textContent = `${name} — Book a Haircut`;
+  document.getElementById("brandName").textContent = name;
+  document.getElementById("shareQrTitle").textContent = `Share ${name}`;
+}
+
 document.addEventListener("DOMContentLoaded", async () => {
+  applyBranding();
   setupSiteQr();
   const code = new URLSearchParams(window.location.search).get("code");
   if (code) { await handleCallback(code); return; }
@@ -520,7 +528,7 @@ function setupSiteQr() {
     if (navigator.share) {
       const btn = document.getElementById("siteQrShare");
       btn.style.display = "";
-      btn.onclick = () => navigator.share({ title: "CutsByBren — Book a Haircut", url });
+      btn.onclick = () => navigator.share({ title: `${CFG.siteName || "Book a Haircut"} — Book a Haircut`, url });
     }
   };
 
