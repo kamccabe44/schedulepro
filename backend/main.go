@@ -49,6 +49,10 @@ func handler(ctx context.Context, req events.APIGatewayV2HTTPRequest) (events.AP
 	case method == "OPTIONS":
 		return respond(200, nil)
 
+	// ── Debug (remove after diagnosis) ───────────────────────────────────
+	case method == "GET" && path == "/debug/claims":
+		return respond(200, req.RequestContext.Authorizer.JWT.Claims)
+
 	// ── Public ────────────────────────────────────────────────────────────
 	case method == "GET" && path == "/slots":
 		return listSlots(ctx, req)
