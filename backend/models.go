@@ -30,6 +30,30 @@ type Service struct {
 	Price    string `json:"price"`
 }
 
+// DaySchedule holds a barber's hours for one weekday.
+type DaySchedule struct {
+	Open        bool `json:"open"        dynamodbav:"open"`
+	OpenHour    int  `json:"openHour"    dynamodbav:"openHour"`
+	OpenMinute  int  `json:"openMinute"  dynamodbav:"openMinute"`
+	CloseHour   int  `json:"closeHour"   dynamodbav:"closeHour"`
+	CloseMinute int  `json:"closeMinute" dynamodbav:"closeMinute"`
+}
+
+// BarberService is a service offering defined by a barber.
+type BarberService struct {
+	ID       string `json:"id"       dynamodbav:"id"`
+	Name     string `json:"name"     dynamodbav:"name"`
+	Duration int    `json:"duration" dynamodbav:"duration"` // minutes
+	Price    string `json:"price"    dynamodbav:"price"`
+}
+
+// BarberSettings holds a barber's full schedule and service list.
+type BarberSettings struct {
+	BarberID string                 `json:"barberId"  dynamodbav:"barberId"`
+	Schedule map[string]DaySchedule `json:"schedule"  dynamodbav:"schedule"`  // key = "Monday" etc.
+	Services []BarberService        `json:"services"  dynamodbav:"services"`
+}
+
 var services = map[string]Service{
 	"haircut":       {ID: "haircut", Name: "Haircut", Duration: 30, Price: "$25"},
 	"beard":         {ID: "beard", Name: "Beard Trim", Duration: 20, Price: "$15"},

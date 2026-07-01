@@ -15,31 +15,62 @@ import (
 	"github.com/google/uuid"
 )
 
-// listSlots returns all slots for a date with availability status.
-// Public — no auth required.
+// listSlots returns available slots for a date and barber.
+// Requires barberId query param. Public — no auth required.
 func listSlots(ctx context.Context, req events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error) {
 	date := req.QueryStringParameters["date"]
-	if date == "" {
-		return respond(400, map[string]string{"error": "date query parameter required (YYYY-MM-DD)"})
+	barberID := req.QueryStringParameters["barberId"]
+	if date == "" || barberID == "" {
+		return respond(400, map[string]string{"error": "date and barberId query parameters required"})
 	}
 
-	allSlots, err := generateSlots(date)
+	// Fetch barber's schedule
+	settingsResult, err := db.GetItem(ctx, &dynamodb.GetItemInput{
+		TableName: &barberSettingsTable,
+		Key: map[string]types.AttributeValue{
+			"barberId": &types.AttributeValueMemberS{Value: barberID},
+		},
+	})
+	if err != nil {
+		return respond(500, map[string]string{"error": err.Error()})
+	}
+	if settingsResult.Item == nil {
+		return respond(200, []SlotResponse{})
+	}
+
+	var settings BarberSettings
+	if err := attributevalue.UnmarshalMap(settingsResult.Item, &settings); err != nil {
+		return respond(500, map[string]string{"error": err.Error()})
+	}
+
+	d, err := time.Parse("2006-01-02", date)
+	if err != nil {
+		return respond(400, map[string]string{"error": "invalid date format, expected YYYY-MM-DD"})
+	}
+
+	daySchedule, ok := settings.Schedule[d.Weekday().String()]
+	if !ok || !daySchedule.Open {
+		return respond(200, []SlotResponse{})
+	}
+
+	allSlots, err := generateSlotsFromSchedule(date, daySchedule)
 	if err != nil {
 		return respond(400, map[string]string{"error": err.Error()})
 	}
 
-	// Find which slots are already booked
+	// Find which of this barber's slots are already booked
 	out, err := db.Query(ctx, &dynamodb.QueryInput{
 		TableName:              &tableName,
 		IndexName:              aws.String("date-index"),
 		KeyConditionExpression: aws.String("#date = :date"),
-		FilterExpression:       aws.String("#status = :booked"),
+		FilterExpression:       aws.String("barberId = :bid AND #status = :booked"),
 		ExpressionAttributeNames: map[string]string{
 			"#date":   "date",
 			"#status": "status",
 		},
 		ExpressionAttributeValues: map[string]types.AttributeValue{
 			":date":   &types.AttributeValueMemberS{Value: date},
+			":bid":    &types.AttributeValueMemberS{Value: barberID},
 			":booked": &types.AttributeValueMemberS{Value: "booked"},
 		},
 	})
@@ -56,13 +87,8 @@ func listSlots(ctx context.Context, req events.APIGatewayV2HTTPRequest) (events.
 
 	result := make([]SlotResponse, len(allSlots))
 	for i, ts := range allSlots {
-		result[i] = SlotResponse{
-			Date:      date,
-			TimeSlot:  ts,
-			Available: !booked[ts],
-		}
+		result[i] = SlotResponse{Date: date, TimeSlot: ts, Available: !booked[ts]}
 	}
-
 	return respond(200, result)
 }
 
@@ -94,16 +120,50 @@ func bookAppointment(ctx context.Context, req events.APIGatewayV2HTTPRequest) (e
 		return respond(400, map[string]string{"error": "invalid request body"})
 	}
 
-	if body.Date == "" || body.TimeSlot == "" || body.Service == "" {
-		return respond(400, map[string]string{"error": "date, timeSlot, and service are required"})
+	if body.Date == "" || body.TimeSlot == "" || body.Service == "" || body.BarberID == "" {
+		return respond(400, map[string]string{"error": "date, timeSlot, service, and barberId are required"})
 	}
 
-	if _, ok := services[body.Service]; !ok {
-		return respond(400, map[string]string{"error": "invalid service"})
+	// Fetch barber settings to validate service and time slot
+	settingsResult, err := db.GetItem(ctx, &dynamodb.GetItemInput{
+		TableName: &barberSettingsTable,
+		Key: map[string]types.AttributeValue{
+			"barberId": &types.AttributeValueMemberS{Value: body.BarberID},
+		},
+	})
+	if err != nil {
+		return respond(500, map[string]string{"error": err.Error()})
+	}
+	if settingsResult.Item == nil {
+		return respond(400, map[string]string{"error": "barber has not configured their schedule"})
+	}
+	var barberSettings BarberSettings
+	if err := attributevalue.UnmarshalMap(settingsResult.Item, &barberSettings); err != nil {
+		return respond(500, map[string]string{"error": err.Error()})
 	}
 
-	// Verify the requested slot exists in the shop schedule
-	allSlots, err := generateSlots(body.Date)
+	// Validate the service is offered by this barber
+	validService := false
+	for _, svc := range barberSettings.Services {
+		if svc.ID == body.Service {
+			validService = true
+			break
+		}
+	}
+	if !validService {
+		return respond(400, map[string]string{"error": "invalid service for this barber"})
+	}
+
+	// Validate the time slot is within the barber's schedule for this day
+	d, err := time.Parse("2006-01-02", body.Date)
+	if err != nil {
+		return respond(400, map[string]string{"error": "invalid date format"})
+	}
+	daySchedule, ok := barberSettings.Schedule[d.Weekday().String()]
+	if !ok || !daySchedule.Open {
+		return respond(400, map[string]string{"error": "barber is not available on this day"})
+	}
+	allSlots, err := generateSlotsFromSchedule(body.Date, daySchedule)
 	if err != nil {
 		return respond(400, map[string]string{"error": err.Error()})
 	}
@@ -115,21 +175,22 @@ func bookAppointment(ctx context.Context, req events.APIGatewayV2HTTPRequest) (e
 		}
 	}
 	if !validSlot {
-		return respond(400, map[string]string{"error": "invalid time slot for this date"})
+		return respond(400, map[string]string{"error": "invalid time slot for this barber"})
 	}
 
-	// Check the slot isn't already taken
+	// Check the slot isn't already taken by this barber
 	out, err := db.Query(ctx, &dynamodb.QueryInput{
 		TableName:              &tableName,
 		IndexName:              aws.String("date-index"),
 		KeyConditionExpression: aws.String("#date = :date"),
-		FilterExpression:       aws.String("timeSlot = :ts AND #status = :booked"),
+		FilterExpression:       aws.String("barberId = :bid AND timeSlot = :ts AND #status = :booked"),
 		ExpressionAttributeNames: map[string]string{
 			"#date":   "date",
 			"#status": "status",
 		},
 		ExpressionAttributeValues: map[string]types.AttributeValue{
 			":date":   &types.AttributeValueMemberS{Value: body.Date},
+			":bid":    &types.AttributeValueMemberS{Value: body.BarberID},
 			":ts":     &types.AttributeValueMemberS{Value: body.TimeSlot},
 			":booked": &types.AttributeValueMemberS{Value: "booked"},
 		},

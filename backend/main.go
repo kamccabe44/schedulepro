@@ -14,11 +14,12 @@ import (
 )
 
 var (
-	db            *dynamodb.Client
-	cognitoClient *cognitoidentityprovider.Client
-	tableName     string
-	stageName     string
-	userPoolID    string
+	db                 *dynamodb.Client
+	cognitoClient      *cognitoidentityprovider.Client
+	tableName          string
+	barberSettingsTable string
+	stageName          string
+	userPoolID         string
 )
 
 func init() {
@@ -29,6 +30,7 @@ func init() {
 	db = dynamodb.NewFromConfig(cfg)
 	cognitoClient = cognitoidentityprovider.NewFromConfig(cfg)
 	tableName = os.Getenv("TABLE_NAME")
+	barberSettingsTable = os.Getenv("BARBER_SETTINGS_TABLE")
 	stageName = os.Getenv("STAGE_NAME")
 	userPoolID = os.Getenv("USER_POOL_ID")
 }
@@ -62,12 +64,16 @@ func handler(ctx context.Context, req events.APIGatewayV2HTTPRequest) (events.AP
 		return myAppointments(ctx, req)
 	case method == "GET" && path == "/barbers":
 		return listBarbersPublic(ctx, req)
+	case method == "GET" && len(parts) == 3 && parts[0] == "barbers" && parts[2] == "settings":
+		return getBarberSettings(ctx, parts[1])
 	case method == "PUT" && len(parts) == 3 && parts[0] == "appointments" && parts[2] == "cancel":
 		return cancelAppointment(ctx, req, parts[1])
 
 	// ── Barber / Admin ────────────────────────────────────────────────────
 	case method == "GET" && path == "/admin/appointments":
 		return adminAppointments(ctx, req)
+	case method == "PUT" && path == "/barbers/me/settings":
+		return updateBarberSettings(ctx, req)
 
 	// ── Admin only ────────────────────────────────────────────────────────
 	case method == "GET" && path == "/admin/barbers":

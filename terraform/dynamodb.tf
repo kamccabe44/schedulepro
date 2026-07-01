@@ -33,3 +33,14 @@ resource "aws_dynamodb_table" "appointments" {
     projection_type = "ALL"
   }
 }
+
+resource "aws_dynamodb_table" "barber_settings" {
+  name         = "${var.app_name}-barber-settings"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "barberId"
+
+  attribute {
+    name = "barberId"
+    type = "S"
+  }
+}

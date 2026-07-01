@@ -42,6 +42,7 @@ resource "aws_iam_role_policy" "lambda_dynamo" {
         Resource = [
           aws_dynamodb_table.appointments.arn,
           "${aws_dynamodb_table.appointments.arn}/index/*",
+          aws_dynamodb_table.barber_settings.arn,
         ]
       },
       {
@@ -71,9 +72,10 @@ resource "aws_lambda_function" "api" {
 
   environment {
     variables = {
-      TABLE_NAME   = aws_dynamodb_table.appointments.name
-      STAGE_NAME   = aws_apigatewayv2_stage.prod.name
-      USER_POOL_ID = aws_cognito_user_pool.main.id
+      TABLE_NAME              = aws_dynamodb_table.appointments.name
+      BARBER_SETTINGS_TABLE   = aws_dynamodb_table.barber_settings.name
+      STAGE_NAME              = aws_apigatewayv2_stage.prod.name
+      USER_POOL_ID            = aws_cognito_user_pool.main.id
     }
   }
 }

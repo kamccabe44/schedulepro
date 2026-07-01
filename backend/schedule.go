@@ -23,6 +23,23 @@ var openDays = map[time.Weekday]bool{
 	time.Saturday:  true,
 }
 
+// generateSlotsFromSchedule returns slots for a date using a barber's DaySchedule.
+func generateSlotsFromSchedule(date string, day DaySchedule) ([]string, error) {
+	if _, err := time.Parse("2006-01-02", date); err != nil {
+		return nil, fmt.Errorf("invalid date format, expected YYYY-MM-DD")
+	}
+	if !day.Open {
+		return []string{}, nil
+	}
+	var slots []string
+	open := day.OpenHour*60 + day.OpenMinute
+	close := day.CloseHour*60 + day.CloseMinute
+	for t := open; t < close; t += slotMinutes {
+		slots = append(slots, fmt.Sprintf("%02d:%02d", t/60, t%60))
+	}
+	return slots, nil
+}
+
 // generateSlots returns all time slots for a given date based on shop hours.
 // Returns an empty slice for closed days.
 func generateSlots(date string) ([]string, error) {

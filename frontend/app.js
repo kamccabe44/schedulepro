@@ -110,7 +110,6 @@ function initApp() {
   document.getElementById("userName").textContent = claims.name || claims.email;
   document.getElementById("logoutBtn").onclick = logout;
 
-  // Role badge + show relevant tabs
   const badge = document.getElementById("userBadge");
   if (isAdmin()) {
     badge.textContent = "Admin";
@@ -128,7 +127,7 @@ function initApp() {
   setupTabs();
   setupBookingForm();
   loadMyAppointments();
-  if (isBarberOrAdmin()) setupScheduleView();
+  if (isBarberOrAdmin()) { setupScheduleView(); setupSettingsPanel(); }
   if (isAdmin()) setupStaffPanel();
 }
 
@@ -153,9 +152,16 @@ async function setupBookingForm() {
   const today = new Date().toISOString().slice(0, 10);
   const picker = document.getElementById("datePicker");
   const barberSel = document.getElementById("barberPicker");
+  const serviceSel = document.getElementById("servicePicker");
   picker.min = today;
   picker.value = today;
-  picker.onchange = () => { selectedSlot = null; document.getElementById("bookingConfirm").classList.add("hidden"); loadSlots(picker.value); };
+
+  // Reload slots when date changes (only if a barber is already selected)
+  picker.onchange = () => {
+    selectedSlot = null;
+    document.getElementById("bookingConfirm").classList.add("hidden");
+    if (barberSel.value) loadSlots(picker.value, barberSel.value);
+  };
 
   try {
     const barbers = await api("GET", "/barbers");
@@ -165,30 +171,45 @@ async function setupBookingForm() {
       opt.dataset.name = b.name || b.email;
       opt.textContent = b.name || b.email;
       barberSel.appendChild(opt);
-    })
-    const svcs = await api("GET", "/services");
-    const sel = document.getElementById("servicePicker");
-    svcs.sort((a, b) => a.name.localeCompare(b.name)).forEach(s => {
-      const opt = document.createElement("option");
-      opt.value = s.id;
-      opt.textContent = `${s.name} — ${s.price} (${s.duration} min)`;
-      sel.appendChild(opt);
     });
-    sel.onchange = () => { selectedSlot = null; updateConfirm(); loadSlots(picker.value); };
-  } catch { showToast("Could not load services", true); }
+  } catch { showToast("Could not load barbers", true); }
 
+  // When barber changes: reload their services and slots
+  barberSel.onchange = async () => {
+    selectedSlot = null;
+    document.getElementById("bookingConfirm").classList.add("hidden");
+    document.getElementById("slotsSection").classList.add("hidden");
+    serviceSel.innerHTML = `<option value="">— choose a service —</option>`;
+
+    const barberID = barberSel.value;
+    if (!barberID) return;
+
+    try {
+      const settings = await api("GET", `/barbers/${barberID}/settings`);
+      (settings.services || []).sort((a, b) => a.name.localeCompare(b.name)).forEach(s => {
+        const opt = document.createElement("option");
+        opt.value = s.id;
+        opt.textContent = `${s.name} — ${s.price} (${s.duration} min)`;
+        serviceSel.appendChild(opt);
+      });
+    } catch { showToast("Could not load barber's services", true); }
+
+    loadSlots(picker.value, barberID);
+  };
+
+  serviceSel.onchange = () => { selectedSlot = null; updateConfirm(); };
   document.getElementById("confirmBookBtn").onclick = confirmBooking;
-  loadSlots(today);
 }
 
-async function loadSlots(date) {
+async function loadSlots(date, barberID) {
   const slotsSection = document.getElementById("slotsSection");
   const grid = document.getElementById("slotsGrid");
+  if (!barberID) { slotsSection.classList.add("hidden"); return; }
   try {
-    const slots = await api("GET", `/slots?date=${date}`);
+    const slots = await api("GET", `/slots?date=${date}&barberId=${barberID}`);
     grid.innerHTML = "";
     slotsSection.classList.remove("hidden");
-    if (slots.length === 0) { grid.innerHTML = `<p class="muted">Shop is closed on this day.</p>`; return; }
+    if (slots.length === 0) { grid.innerHTML = `<p class="muted">No availability on this day.</p>`; return; }
     slots.forEach(s => {
       const btn = document.createElement("button");
       btn.className = "slot-btn" + (s.available ? "" : " unavailable");
@@ -211,9 +232,11 @@ function updateConfirm() {
   const confirmDiv = document.getElementById("bookingConfirm");
   const serviceId = document.getElementById("servicePicker").value;
   const serviceText = document.getElementById("servicePicker").selectedOptions[0]?.text;
+  const barberName = document.getElementById("barberPicker").selectedOptions[0]?.dataset.name || "";
   if (selectedSlot && serviceId) {
     confirmDiv.classList.remove("hidden");
-    document.getElementById("confirmSummary").innerHTML = `<strong>${serviceText}</strong><br>${formatDate(selectedSlot.date)} at ${formatTime(selectedSlot.timeSlot)}`;
+    document.getElementById("confirmSummary").innerHTML =
+      `<strong>${serviceText}</strong> with ${barberName}<br>${formatDate(selectedSlot.date)} at ${formatTime(selectedSlot.timeSlot)}`;
   } else {
     confirmDiv.classList.add("hidden");
   }
@@ -225,7 +248,7 @@ async function confirmBooking() {
   const barberOpt = document.getElementById("barberPicker").selectedOptions[0];
   const barberId = barberOpt?.value || "";
   const barberName = barberOpt?.dataset.name || "";
-  if (!selectedSlot || !serviceId) return;
+  if (!selectedSlot || !serviceId || !barberId) return;
   try {
     await api("POST", "/appointments", {
       date: selectedSlot.date,
@@ -233,20 +256,19 @@ async function confirmBooking() {
       service: serviceId,
       notes,
       barberId,
-      barberName
+      barberName,
     });
     showToast("Appointment booked!");
     selectedSlot = null;
     document.getElementById("bookingConfirm").classList.add("hidden");
     document.getElementById("bookingNotes").value = "";
     document.querySelectorAll(".slot-btn").forEach(b => b.classList.remove("selected"));
-    loadSlots(document.getElementById("datePicker").value);
+    loadSlots(document.getElementById("datePicker").value, barberId);
     loadMyAppointments();
   } catch (err) { showToast(err.message, true); }
 }
 
-
-  // ── My Appointments ───────────────────────────────────────────────────────────
+// ── My Appointments ───────────────────────────────────────────────────────────
 
 async function loadMyAppointments() {
   const list = document.getElementById("appointmentsList");
@@ -265,7 +287,7 @@ function appointmentCard(appt) {
   el.innerHTML = `
     <div class="appt-info">
       <div class="appt-datetime">${formatDate(appt.date)} &mdash; ${formatTime(appt.timeSlot)}</div>
-      <div class="appt-service">${capitalize(appt.service.replace(/_/g, " "))}</div>
+      <div class="appt-service">${appt.barberName ? `with ${appt.barberName} &mdash; ` : ""}${capitalize(appt.service.replace(/_/g, " "))}</div>
       ${appt.notes ? `<div class="appt-notes">${appt.notes}</div>` : ""}
     </div>
     <div class="appt-actions">
@@ -318,6 +340,98 @@ async function loadSchedule(date) {
       list.appendChild(row);
     });
   } catch (err) { list.innerHTML = `<p class="muted error">Could not load schedule.</p>`; }
+}
+
+// ── Barber: My Settings ───────────────────────────────────────────────────────
+
+const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+let settingsServices = []; // local copy of the barber's services being edited
+
+async function setupSettingsPanel() {
+  // Build schedule rows
+  const tbody = document.getElementById("scheduleRows");
+  DAYS.forEach(day => {
+    const tr = document.createElement("tr");
+    tr.id = `day-${day}`;
+    tr.innerHTML = `
+      <td>${day}</td>
+      <td><input type="checkbox" id="open-${day}" /></td>
+      <td><input type="time" id="open-time-${day}" value="09:00" /></td>
+      <td><input type="time" id="close-time-${day}" value="17:00" /></td>`;
+    tbody.appendChild(tr);
+  });
+
+  document.getElementById("addSvcBtn").onclick = addServiceRow;
+  document.getElementById("saveSettingsBtn").onclick = saveSettings;
+
+  // Load existing settings
+  const claims = parseIdToken();
+  if (!claims) return;
+  try {
+    const settings = await api("GET", `/barbers/${claims.sub}/settings`);
+    // Populate schedule
+    DAYS.forEach(day => {
+      const s = settings.schedule?.[day];
+      if (s) {
+        document.getElementById(`open-${day}`).checked = s.open;
+        document.getElementById(`open-time-${day}`).value = `${String(s.openHour).padStart(2,"0")}:${String(s.openMinute).padStart(2,"0")}`;
+        document.getElementById(`close-time-${day}`).value = `${String(s.closeHour).padStart(2,"0")}:${String(s.closeMinute).padStart(2,"0")}`;
+      }
+    });
+    // Populate services
+    settingsServices = settings.services || [];
+    renderServiceRows();
+  } catch { showToast("Could not load your settings", true); }
+}
+
+function renderServiceRows() {
+  const list = document.getElementById("servicesList");
+  list.innerHTML = "";
+  settingsServices.forEach((svc, i) => {
+    const row = document.createElement("div");
+    row.className = "appt-card";
+    row.style.marginBottom = "0.5rem";
+    row.innerHTML = `
+      <div class="appt-info">
+        <div class="appt-datetime">${svc.name}</div>
+        <div class="appt-service">${svc.price} &mdash; ${svc.duration} min</div>
+      </div>
+      <button class="btn-danger-sm">Remove</button>`;
+    row.querySelector("button").onclick = () => {
+      settingsServices.splice(i, 1);
+      renderServiceRows();
+    };
+    list.appendChild(row);
+  });
+  if (settingsServices.length === 0) {
+    list.innerHTML = `<p class="muted">No services added yet.</p>`;
+  }
+}
+
+function addServiceRow() {
+  const name = document.getElementById("newSvcName").value.trim();
+  const duration = parseInt(document.getElementById("newSvcDuration").value, 10);
+  const price = document.getElementById("newSvcPrice").value.trim();
+  if (!name || !duration || duration < 1) { showToast("Name and duration are required", true); return; }
+  settingsServices.push({ id: crypto.randomUUID(), name, duration, price: price || "TBD" });
+  document.getElementById("newSvcName").value = "";
+  document.getElementById("newSvcDuration").value = "";
+  document.getElementById("newSvcPrice").value = "";
+  renderServiceRows();
+}
+
+async function saveSettings() {
+  const schedule = {};
+  DAYS.forEach(day => {
+    const open = document.getElementById(`open-${day}`).checked;
+    const [openHour, openMinute] = document.getElementById(`open-time-${day}`).value.split(":").map(Number);
+    const [closeHour, closeMinute] = document.getElementById(`close-time-${day}`).value.split(":").map(Number);
+    schedule[day] = { open, openHour, openMinute, closeHour, closeMinute };
+  });
+  try {
+    await api("PUT", "/barbers/me/settings", { schedule, services: settingsServices });
+    showToast("Settings saved!");
+  } catch (err) { showToast(err.message, true); }
 }
 
 // ── Admin: Staff Management ───────────────────────────────────────────────────
