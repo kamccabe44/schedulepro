@@ -78,6 +78,8 @@ func handler(ctx context.Context, req events.APIGatewayV2HTTPRequest) (events.AP
 	// ── Admin only ────────────────────────────────────────────────────────
 	case method == "GET" && path == "/admin/barbers":
 		return listBarbers(ctx, req)
+	case method == "GET" && path == "/admin/stats":
+		return adminMonthlyStats(ctx, req)
 	case method == "POST" && path == "/admin/barbers":
 		return addBarber(ctx, req)
 	case method == "DELETE" && len(parts) == 3 && parts[0] == "admin" && parts[1] == "barbers":

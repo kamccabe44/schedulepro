@@ -137,7 +137,7 @@ function initApp() {
   setupBookingForm();
   loadMyAppointments();
   if (isBarberOrAdmin()) { setupScheduleView(); setupSettingsPanel(); }
-  if (isAdmin()) setupStaffPanel();
+  if (isAdmin()) { setupStaffPanel(); setupStatsPanel(); }
 }
 
 // ── Tabs ──────────────────────────────────────────────────────────────────────
@@ -501,6 +501,44 @@ async function removeBarber(userId, email) {
     showToast("Barber removed");
     loadBarbers();
   } catch (err) { showToast(err.message, true); }
+}
+
+// ── Admin: Stats ──────────────────────────────────────────────────────────────
+
+function setupStatsPanel() {
+  const picker = document.getElementById("statsMonthPicker");
+  const now = new Date();
+  const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  picker.value = currentMonth;
+  picker.onchange = () => loadStats(picker.value);
+  loadStats(currentMonth);
+}
+
+async function loadStats(month) {
+  const list = document.getElementById("statsList");
+  list.innerHTML = `<p class="muted">Loading...</p>`;
+  try {
+    const stats = await api("GET", `/admin/stats?month=${month}`);
+    if (stats.length === 0) { list.innerHTML = `<p class="muted">No appointments for this month.</p>`; return; }
+    const totalBooked = stats.reduce((sum, s) => sum + s.booked, 0);
+    list.innerHTML = "";
+    stats.forEach(s => {
+      const row = document.createElement("div");
+      row.className = "appt-card";
+      row.innerHTML = `
+        <div class="appt-info">
+          <div class="appt-datetime">${s.barberName || "(unknown)"}</div>
+          <div class="appt-service">${s.cancelled} cancelled</div>
+        </div>
+        <span class="appt-status booked" style="font-size:1.1rem">${s.booked}</span>`;
+      list.appendChild(row);
+    });
+    const totalRow = document.createElement("div");
+    totalRow.className = "appt-card";
+    totalRow.style.fontWeight = "700";
+    totalRow.innerHTML = `<div class="appt-info"><div class="appt-datetime">Total</div></div><span>${totalBooked}</span>`;
+    list.appendChild(totalRow);
+  } catch (err) { list.innerHTML = `<p class="muted error">Could not load stats.</p>`; }
 }
 
 // ── Site QR code ──────────────────────────────────────────────────────────────
