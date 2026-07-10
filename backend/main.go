@@ -11,15 +11,19 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/cognitoidentityprovider"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	"github.com/aws/aws-sdk-go-v2/service/sesv2"
 )
 
 var (
-	db                 *dynamodb.Client
-	cognitoClient      *cognitoidentityprovider.Client
-	tableName          string
+	db                  *dynamodb.Client
+	cognitoClient       *cognitoidentityprovider.Client
+	sesClient           *sesv2.Client
+	tableName           string
 	barberSettingsTable string
-	stageName          string
-	userPoolID         string
+	stageName           string
+	userPoolID          string
+	fromEmail           string
+	siteName            string
 )
 
 func init() {
@@ -29,10 +33,13 @@ func init() {
 	}
 	db = dynamodb.NewFromConfig(cfg)
 	cognitoClient = cognitoidentityprovider.NewFromConfig(cfg)
+	sesClient = sesv2.NewFromConfig(cfg)
 	tableName = os.Getenv("TABLE_NAME")
 	barberSettingsTable = os.Getenv("BARBER_SETTINGS_TABLE")
 	stageName = os.Getenv("STAGE_NAME")
 	userPoolID = os.Getenv("USER_POOL_ID")
+	fromEmail = os.Getenv("FROM_EMAIL")
+	siteName = os.Getenv("SITE_NAME")
 }
 
 func handler(ctx context.Context, req events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error) {

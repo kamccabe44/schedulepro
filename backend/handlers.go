@@ -230,6 +230,10 @@ func bookAppointment(ctx context.Context, req events.APIGatewayV2HTTPRequest) (e
 		return respond(500, map[string]string{"error": err.Error()})
 	}
 
+	// Send synchronously (not backgrounded) — Lambda freezes the execution
+	// environment as soon as the handler returns, which would abandon a goroutine.
+	sendBookingConfirmation(ctx, appt)
+
 	return respond(201, appt)
 }
 

@@ -55,6 +55,19 @@ resource "aws_iam_role_policy" "lambda_dynamo" {
           "cognito-idp:AdminGetUser",
         ]
         Resource = aws_cognito_user_pool.main.arn
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "ses:SendEmail",
+          "ses:SendRawEmail",
+        ]
+        Resource = "*"
+        Condition = {
+          StringEquals = {
+            "ses:FromAddress" = local.from_email
+          }
+        }
       }
     ]
   })
@@ -76,6 +89,8 @@ resource "aws_lambda_function" "api" {
       BARBER_SETTINGS_TABLE   = aws_dynamodb_table.barber_settings.name
       STAGE_NAME              = aws_apigatewayv2_stage.prod.name
       USER_POOL_ID            = aws_cognito_user_pool.main.id
+      FROM_EMAIL              = local.from_email
+      SITE_NAME                = var.customer_name
     }
   }
 }

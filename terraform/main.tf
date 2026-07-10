@@ -38,3 +38,7 @@ provider "aws" {
 }
 
 data "aws_caller_identity" "current" {}
+
+locals {
+  from_email = "bookings@haircuts.1136mpco.com"
+}
