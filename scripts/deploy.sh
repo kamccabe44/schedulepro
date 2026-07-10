@@ -4,14 +4,13 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 # Customer name drives cost-allocation tags and on-site branding.
-# Accept it as the first arg, or an existing CUSTOMER_NAME env var, else prompt.
+# Accept it as the first arg, or an existing CUSTOMER_NAME env var, else prompt
+# (defaulting to CutsByBren if the prompt is left blank).
+DEFAULT_CUSTOMER_NAME="CutsByBren"
 CUSTOMER_NAME="${1:-${CUSTOMER_NAME:-}}"
 if [ -z "$CUSTOMER_NAME" ]; then
-  read -r -p "Customer name (used for tags and site branding): " CUSTOMER_NAME
-fi
-if [ -z "$CUSTOMER_NAME" ]; then
-  echo "Error: customer name is required." >&2
-  exit 1
+  read -r -p "Customer name (used for tags and site branding) [$DEFAULT_CUSTOMER_NAME]: " CUSTOMER_NAME
+  CUSTOMER_NAME="${CUSTOMER_NAME:-$DEFAULT_CUSTOMER_NAME}"
 fi
 
 echo "==> Building Go Lambda binary..."
