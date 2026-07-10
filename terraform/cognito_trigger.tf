@@ -28,11 +28,18 @@ resource "aws_iam_role_policy" "cognito_trigger_policy" {
 
   policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [{
-      Effect   = "Allow"
-      Action   = "cognito-idp:AdminAddUserToGroup"
-      Resource = aws_cognito_user_pool.main.arn
-    }]
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = "cognito-idp:AdminAddUserToGroup"
+        Resource = aws_cognito_user_pool.main.arn
+      },
+      {
+        Effect   = "Allow"
+        Action   = "ses:CreateEmailIdentity"
+        Resource = "arn:aws:ses:${var.region}:${data.aws_caller_identity.current.account_id}:identity/*"
+      }
+    ]
   })
 }
 
