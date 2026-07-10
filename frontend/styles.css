@@ -261,3 +261,12 @@ select option { background: var(--surface-2); }
 .qr-open-link:hover { text-decoration: underline; }
 
 #authArea { display: flex; align-items: center; gap: .75rem; flex-wrap: wrap; }
+
+#siteFooter {
+  text-align: center;
+  padding: 1.5rem 1rem 5rem;
+  font-size: .8rem;
+  color: var(--text-muted);
+}
+#siteFooter a { color: var(--text-muted); text-decoration: underline; }
+#siteFooter a:hover { color: var(--primary); }
