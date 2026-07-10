@@ -331,6 +331,72 @@ func cancelAppointment(ctx context.Context, req events.APIGatewayV2HTTPRequest, 
 	return respond(200, appt)
 }
 
+// completeAppointment marks the appointment as completed.
+// Only the assigned barber (or an admin) can mark it complete.
+func completeAppointment(ctx context.Context, req events.APIGatewayV2HTTPRequest, id string) (events.APIGatewayV2HTTPResponse, error) {
+	userID, _, _ := claimsFromRequest(req)
+	if userID == "" {
+		return respond(401, map[string]string{"error": "unauthorized"})
+	}
+	if !isBarberOrAdmin(req) {
+		return respond(403, map[string]string{"error": "forbidden"})
+	}
+
+	result, err := db.GetItem(ctx, &dynamodb.GetItemInput{
+		TableName: &tableName,
+		Key: map[string]types.AttributeValue{
+			"id": &types.AttributeValueMemberS{Value: id},
+		},
+	})
+	if err != nil {
+		return respond(500, map[string]string{"error": err.Error()})
+	}
+	if result.Item == nil {
+		return respond(404, map[string]string{"error": "appointment not found"})
+	}
+
+	var appt Appointment
+	if err := attributevalue.UnmarshalMap(result.Item, &appt); err != nil {
+		return respond(500, map[string]string{"error": err.Error()})
+	}
+
+	if appt.BarberID != userID && !isAdmin(req) {
+		return respond(403, map[string]string{"error": "forbidden"})
+	}
+
+	if appt.Status == "cancelled" {
+		return respond(400, map[string]string{"error": "cannot complete a cancelled appointment"})
+	}
+	if appt.Status == "completed" {
+		return respond(400, map[string]string{"error": "appointment is already completed"})
+	}
+
+	_, err = db.UpdateItem(ctx, &dynamodb.UpdateItemInput{
+		TableName: &tableName,
+		Key: map[string]types.AttributeValue{
+			"id": &types.AttributeValueMemberS{Value: id},
+		},
+		UpdateExpression: aws.String("SET #status = :completed"),
+		ExpressionAttributeNames: map[string]string{
+			"#status": "status",
+		},
+		ExpressionAttributeValues: map[string]types.AttributeValue{
+			":completed": &types.AttributeValueMemberS{Value: "completed"},
+		},
+		ConditionExpression: aws.String("attribute_exists(id)"),
+	})
+	if err != nil {
+		var condErr *types.ConditionalCheckFailedException
+		if errors.As(err, &condErr) {
+			return respond(404, map[string]string{"error": "appointment not found"})
+		}
+		return respond(500, map[string]string{"error": err.Error()})
+	}
+
+	appt.Status = "completed"
+	return respond(200, appt)
+}
+
 // claimsFromRequest extracts verified JWT claims injected by API Gateway.
 func claimsFromRequest(req events.APIGatewayV2HTTPRequest) (userID, email, name string) {
 	claims := req.RequestContext.Authorizer.JWT.Claims

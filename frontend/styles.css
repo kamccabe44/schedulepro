@@ -72,6 +72,17 @@ header {
   cursor: pointer;
 }
 .btn-danger-sm:hover { background: var(--danger); color: #fff; }
+.btn-primary-sm {
+  background: var(--primary);
+  border: 1px solid var(--primary);
+  color: #111;
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: .75rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.btn-primary-sm:hover { opacity: .85; }
 
 /* ── Hero ── */
 #hero {
@@ -181,6 +192,7 @@ select option { background: var(--surface-2); }
 }
 .appt-status.booked { color: var(--success); }
 .appt-status.cancelled { color: var(--text-muted); }
+.appt-status.completed { color: var(--primary); }
 
 /* ── Utility ── */
 .muted { color: var(--text-muted); font-size: .9rem; }

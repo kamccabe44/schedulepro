@@ -72,6 +72,8 @@ func handler(ctx context.Context, req events.APIGatewayV2HTTPRequest) (events.AP
 	// ── Barber / Admin ────────────────────────────────────────────────────
 	case method == "GET" && path == "/admin/appointments":
 		return adminAppointments(ctx, req)
+	case method == "PUT" && len(parts) == 3 && parts[0] == "appointments" && parts[2] == "complete":
+		return completeAppointment(ctx, req, parts[1])
 	case method == "PUT" && path == "/barbers/me/settings":
 		return updateBarberSettings(ctx, req)
 

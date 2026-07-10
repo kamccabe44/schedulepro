@@ -336,6 +336,8 @@ function setupScheduleView() {
 async function loadSchedule(date) {
   const list = document.getElementById("scheduleList");
   list.innerHTML = `<p class="muted">Loading...</p>`;
+  const claims = parseIdToken();
+  const myID = claims?.sub;
   try {
     const appts = await api("GET", `/admin/appointments?date=${date}`);
     if (appts.length === 0) { list.innerHTML = `<p class="muted">No appointments for this day.</p>`; return; }
@@ -345,6 +347,7 @@ async function loadSchedule(date) {
     active.forEach(a => {
       const row = document.createElement("div");
       row.className = "schedule-row";
+      const canComplete = a.status === "booked" && (isAdmin() || a.barberId === myID);
       row.innerHTML = `
         <div class="sched-time">${formatTime(a.timeSlot)}</div>
         <div class="sched-info">
@@ -352,10 +355,20 @@ async function loadSchedule(date) {
           <div class="sched-service">${capitalize(a.service.replace(/_/g, " "))}</div>
           ${a.notes ? `<div class="appt-notes">${a.notes}</div>` : ""}
         </div>
-        <span class="appt-status ${a.status}">${a.status}</span>`;
+        <span class="appt-status ${a.status}">${a.status}</span>
+        ${canComplete ? `<button class="btn-primary-sm">Mark Complete</button>` : ""}`;
+      if (canComplete) row.querySelector("button").onclick = () => markComplete(a.id, date);
       list.appendChild(row);
     });
   } catch (err) { list.innerHTML = `<p class="muted error">Could not load schedule.</p>`; }
+}
+
+async function markComplete(id, date) {
+  try {
+    await api("PUT", `/appointments/${id}/complete`);
+    showToast("Appointment marked complete");
+    loadSchedule(date);
+  } catch (err) { showToast(err.message, true); }
 }
 
 // ── Barber: My Settings ───────────────────────────────────────────────────────
