@@ -268,27 +268,29 @@ select option { background: var(--surface-2); }
   justify-content: center;
 }
 .ozarks-card {
+  --ozarks-navy: #16233f;
+  --ozarks-green: #4b6b47;
   width: 100%;
   max-width: 800px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  background: var(--surface);
-  border: 1px solid var(--border);
+  background: #f4f6fa;
+  border: 1px solid #dbe2ee;
   border-radius: 16px;
   padding: 16px 24px;
   text-decoration: none;
   box-shadow: var(--shadow);
   transition: border-color .15s;
 }
-.ozarks-card:hover { border-color: var(--primary); }
+.ozarks-card:hover { border-color: var(--ozarks-navy); }
 .ozarks-brand { display: flex; align-items: center; gap: 14px; }
 .ozarks-icon {
   font-size: 1.5rem;
-  color: var(--primary);
-  background: var(--surface-2);
-  border: 1px solid var(--border);
+  color: var(--ozarks-navy);
+  background: #fff;
+  border: 1px solid #dbe2ee;
   border-radius: 10px;
   width: 44px;
   height: 44px;
@@ -296,12 +298,14 @@ select option { background: var(--surface-2); }
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  overflow: hidden;
 }
-.ozarks-name { font-weight: 700; font-size: .95rem; color: var(--text); }
-.ozarks-tagline { font-size: .8rem; color: var(--text-muted); margin-top: 2px; }
+.ozarks-icon img { width: 100%; height: 100%; object-fit: contain; }
+.ozarks-name { font-weight: 700; font-size: .95rem; color: var(--ozarks-navy); letter-spacing: .02em; }
+.ozarks-tagline { font-size: .8rem; color: var(--ozarks-green); margin-top: 2px; }
 .ozarks-links { display: flex; gap: 24px; flex-shrink: 0; }
-.ozarks-links span { font-size: .85rem; color: var(--text-muted); }
-.ozarks-card:hover .ozarks-links span { color: var(--primary); }
+.ozarks-links span { font-size: .85rem; color: var(--ozarks-navy); opacity: .75; }
+.ozarks-card:hover .ozarks-links span { opacity: 1; }
 
 @media (max-width: 560px) {
   .ozarks-card { flex-direction: column; align-items: flex-start; }
