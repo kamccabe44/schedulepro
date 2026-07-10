@@ -308,10 +308,26 @@ function appointmentCard(appt) {
     </div>
     <div class="appt-actions">
       <span class="appt-status ${appt.status}">${appt.status}</span>
+      ${!isCancelled ? `<button class="btn-ghost btn-pay-sm" data-id="${appt.id}">Pay</button>` : ""}
       ${!isCancelled ? `<button class="btn-danger-sm" data-id="${appt.id}">Cancel</button>` : ""}
     </div>`;
-  if (!isCancelled) el.querySelector("button").onclick = () => cancelMyAppointment(appt.id);
+  if (!isCancelled) {
+    el.querySelector(".btn-pay-sm").onclick = () => payForAppointment(appt);
+    el.querySelector(".btn-danger-sm").onclick = () => cancelMyAppointment(appt.id);
+  }
   return el;
+}
+
+async function payForAppointment(appt) {
+  if (!appt.barberId) { showToast("No barber on file for this appointment", true); return; }
+  try {
+    const settings = await api("GET", `/barbers/${appt.barberId}/settings`);
+    if (!settings.venmoHandle && !settings.cashAppHandle) {
+      showToast(`${appt.barberName || "This barber"} hasn't added a payment link yet`, true);
+      return;
+    }
+    showPaymentQR(appt.barberName || "your barber", settings.venmoHandle, settings.cashAppHandle);
+  } catch { showToast("Could not load payment info", true); }
 }
 
 async function cancelMyAppointment(id) {
@@ -615,8 +631,15 @@ function showPaymentQR(barberName, venmoHandle, cashAppHandle) {
     lbl.className = "qr-label";
     lbl.textContent = label;
     const canvas = document.createElement("div");
+    const link = document.createElement("a");
+    link.href = url;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    link.className = "qr-open-link";
+    link.textContent = "Open & Pay →";
     wrap.appendChild(lbl);
     wrap.appendChild(canvas);
+    wrap.appendChild(link);
     codesDiv.appendChild(wrap);
     new QRCode(canvas, { text: url, width: 180, height: 180, correctLevel: QRCode.CorrectLevel.M });
   }
