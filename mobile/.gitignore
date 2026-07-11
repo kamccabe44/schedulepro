@@ -1,0 +1,13 @@
+# Build output — regenerated from frontend/ by scripts/sync-web.sh
+www/
+
+# Capacitor-generated native projects (created by `npx cap add ios|android`)
+ios/
+android/
+
+# Dependencies
+node_modules/
+
+# Local secrets / overrides
+.env
+config.local.js
