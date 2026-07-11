@@ -81,22 +81,73 @@ scheme** instead. Two things must line up:
 
 ## Push notifications (booking reminders)
 
-This is the main reason to go native. `src/native-bridge.js` already:
-- requests notification permission,
-- registers with APNs (iOS) / FCM (Android),
-- POSTs the device token to `POST {apiUrl}/devices`.
+This is the main reason to go native, and **the backend is now wired up** using
+Amazon SNS mobile push (same AWS account, near-$0). End to end:
 
-**Backend work you still need to do** (in the Go Lambda, kept out of this folder
-on purpose):
-1. Add a `POST /devices` route that stores `{token, platform, userId}` in
-   DynamoDB.
-2. When a booking is created/approaching, send a push via APNs/FCM (e.g. AWS SNS
-   mobile push, or a small APNs/FCM call) to the stored tokens.
-3. iOS also needs an APNs key in your Apple Developer account; Android needs a
-   Firebase project for FCM.
+- `src/native-bridge.js` requests permission, registers with APNs/FCM, and
+  `POST`s the token to `/devices`.
+- The Go Lambda (`backend/notify.go`) stores tokens in a `device-tokens`
+  DynamoDB table and, on booking, sends a confirmation push via SNS.
+- Terraform (`terraform/sns.tf`) creates the SNS platform applications — **only
+  when you provide credentials**. With no credentials, tokens are still stored
+  but nothing is sent, so a normal deploy is completely unchanged.
 
-Until the backend route exists, the token upload just logs a warning — the app
-is otherwise unaffected.
+To turn push ON, set these Terraform variables (e.g. in `terraform.tfvars`) and
+re-apply:
+
+| Variable | Where it comes from |
+|---|---|
+| `apns_key` | Apple Developer → Keys → new APNs `.p8` key (file contents) |
+| `apns_key_id` | the key's 10-char ID |
+| `apns_team_id` | Apple Developer membership → team ID |
+| `apns_bundle_id` | your app id (default `com.ozarks.schedulepro`) |
+| `apns_sandbox` | `true` for dev/TestFlight builds, `false` for App Store |
+| `fcm_service_account_json` | Firebase project → service account JSON (Android) |
+
+You only need APNs for iOS or FCM for Android — set whichever you're shipping.
+The `apns_sandbox = true` default is correct for the free device-testing methods
+below; flip it to `false` only for a production App Store build.
+
+## Testing on your own phone WITHOUT publishing
+
+You do not need the App Store or Play Store to run this on a real device. Options
+from easiest to most involved:
+
+### Android — easiest
+1. `npm run prepare:android && npm run open:android`
+2. Enable **Developer options → USB debugging** on your phone, plug it in.
+3. Press **Run ▶** in Android Studio — the app installs and launches directly.
+   No Google Play account and no signing needed for your own device.
+4. Or build a debug APK (Build → Build APK), email/AirDrop it to yourself, and
+   install it (allow "install unknown apps"). Great for handing a test build to
+   someone else.
+
+Android push works immediately in this mode once FCM credentials are set.
+
+### iOS — free, with one caveat
+1. On a Mac: `npm run prepare:ios && npm run open:ios`.
+2. In Xcode → Signing & Capabilities, sign in with your **free** Apple ID and let
+   Xcode manage signing (a paid account is NOT required to run on your own
+   device).
+3. Plug in your iPhone, select it as the target, press **Run ▶**.
+4. On the phone: Settings → General → VPN & Device Management → trust your
+   developer certificate.
+
+Caveat: with a **free** Apple ID the app runs for 7 days before you must
+re-install from Xcode, and **push notifications require the paid Apple Developer
+account** (APNs isn't available to free accounts). So you can test the whole app
+and UI for free; to test iOS push specifically you'll need the $99/yr account.
+
+### TestFlight — best for real beta testing (iOS)
+Once you have the paid Apple account, upload a build to **TestFlight** and invite
+up to 10,000 testers by email — full push support, installs like a normal app,
+no public App Store listing. This is the standard way to test with real users
+before publishing. (Android's equivalent is Play Console **Internal testing**.)
+
+### Recommended path for you
+Start with **Android via Android Studio** (fully free, push included) to validate
+the whole flow, then use **iOS free-provisioning** for the UI on an iPhone. Add
+the paid Apple account when you're ready to test iOS push or ship.
 
 ## Publishing
 

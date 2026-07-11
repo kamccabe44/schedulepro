@@ -10,6 +10,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/cognitoidentityprovider v1.62.1
 	github.com/aws/aws-sdk-go-v2/service/dynamodb v1.59.1
 	github.com/aws/aws-sdk-go-v2/service/sesv2 v1.63.0
+	github.com/aws/aws-sdk-go-v2/service/sns v1.41.0
 	github.com/google/uuid v1.6.0
 )
 

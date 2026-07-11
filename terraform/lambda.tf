@@ -43,7 +43,17 @@ resource "aws_iam_role_policy" "lambda_dynamo" {
           aws_dynamodb_table.appointments.arn,
           "${aws_dynamodb_table.appointments.arn}/index/*",
           aws_dynamodb_table.barber_settings.arn,
+          aws_dynamodb_table.device_tokens.arn,
         ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "sns:CreatePlatformEndpoint",
+          "sns:DeleteEndpoint",
+          "sns:Publish",
+        ]
+        Resource = "*"
       },
       {
         Effect = "Allow"
@@ -87,10 +97,13 @@ resource "aws_lambda_function" "api" {
     variables = {
       TABLE_NAME              = aws_dynamodb_table.appointments.name
       BARBER_SETTINGS_TABLE   = aws_dynamodb_table.barber_settings.name
+      DEVICE_TOKENS_TABLE     = aws_dynamodb_table.device_tokens.name
       STAGE_NAME              = aws_apigatewayv2_stage.prod.name
       USER_POOL_ID            = aws_cognito_user_pool.main.id
       FROM_EMAIL              = local.from_email
       SITE_NAME                = var.customer_name
+      APNS_PLATFORM_APP_ARN   = try(aws_sns_platform_application.apns[0].arn, "")
+      FCM_PLATFORM_APP_ARN    = try(aws_sns_platform_application.fcm[0].arn, "")
     }
   }
 }

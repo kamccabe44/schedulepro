@@ -12,19 +12,36 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/cognitoidentityprovider"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/sesv2"
+	"github.com/aws/aws-sdk-go-v2/service/sns"
 )
 
 var (
 	db                  *dynamodb.Client
 	cognitoClient       *cognitoidentityprovider.Client
 	sesClient           *sesv2.Client
+	snsClient           *sns.Client
 	tableName           string
 	barberSettingsTable string
+	deviceTokensTable   string
 	stageName           string
 	userPoolID          string
 	fromEmail           string
 	siteName            string
+	apnsPlatformAppArn  string
+	fcmPlatformAppArn   string
 )
+
+// platformAppArn returns the SNS platform application ARN for a device platform,
+// or "" when push notifications have not been configured for that platform.
+func platformAppArn(platform string) string {
+	switch platform {
+	case "ios":
+		return apnsPlatformAppArn
+	case "android":
+		return fcmPlatformAppArn
+	}
+	return ""
+}
 
 func init() {
 	cfg, err := config.LoadDefaultConfig(context.Background())
@@ -34,12 +51,16 @@ func init() {
 	db = dynamodb.NewFromConfig(cfg)
 	cognitoClient = cognitoidentityprovider.NewFromConfig(cfg)
 	sesClient = sesv2.NewFromConfig(cfg)
+	snsClient = sns.NewFromConfig(cfg)
 	tableName = os.Getenv("TABLE_NAME")
 	barberSettingsTable = os.Getenv("BARBER_SETTINGS_TABLE")
+	deviceTokensTable = os.Getenv("DEVICE_TOKENS_TABLE")
 	stageName = os.Getenv("STAGE_NAME")
 	userPoolID = os.Getenv("USER_POOL_ID")
 	fromEmail = os.Getenv("FROM_EMAIL")
 	siteName = os.Getenv("SITE_NAME")
+	apnsPlatformAppArn = os.Getenv("APNS_PLATFORM_APP_ARN")
+	fcmPlatformAppArn = os.Getenv("FCM_PLATFORM_APP_ARN")
 }
 
 func handler(ctx context.Context, req events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error) {
@@ -71,6 +92,12 @@ func handler(ctx context.Context, req events.APIGatewayV2HTTPRequest) (events.AP
 		return myAppointments(ctx, req)
 	case method == "GET" && path == "/barbers":
 		return listBarbersPublic(ctx, req)
+
+	// ── Push notification device registration ─────────────────────────────
+	case method == "POST" && path == "/devices":
+		return registerDevice(ctx, req)
+	case method == "DELETE" && len(parts) == 2 && parts[0] == "devices":
+		return unregisterDevice(ctx, req, parts[1])
 	case method == "GET" && len(parts) == 3 && parts[0] == "barbers" && parts[2] == "settings":
 		return getBarberSettings(ctx, parts[1])
 	case method == "PUT" && len(parts) == 3 && parts[0] == "appointments" && parts[2] == "cancel":

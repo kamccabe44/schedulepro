@@ -44,3 +44,22 @@ resource "aws_dynamodb_table" "barber_settings" {
     type = "S"
   }
 }
+
+# Push notification device tokens — one user may have several devices, so the
+# table is keyed (userId, token). Queried by userId to fan out notifications.
+resource "aws_dynamodb_table" "device_tokens" {
+  name         = "${var.app_name}-device-tokens"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "userId"
+  range_key    = "token"
+
+  attribute {
+    name = "userId"
+    type = "S"
+  }
+
+  attribute {
+    name = "token"
+    type = "S"
+  }
+}

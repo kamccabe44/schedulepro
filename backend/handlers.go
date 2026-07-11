@@ -233,6 +233,8 @@ func bookAppointment(ctx context.Context, req events.APIGatewayV2HTTPRequest) (e
 	// Send synchronously (not backgrounded) — Lambda freezes the execution
 	// environment as soon as the handler returns, which would abandon a goroutine.
 	sendBookingConfirmation(ctx, appt)
+	sendPushToUser(ctx, userID, "Appointment booked",
+		"You're booked with "+appt.BarberName+" on "+appt.Date+" at "+appt.TimeSlot+".")
 
 	return respond(201, appt)
 }
