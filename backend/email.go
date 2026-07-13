@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/cognitoidentityprovider"
 	"github.com/aws/aws-sdk-go-v2/service/sesv2"
 	"github.com/aws/aws-sdk-go-v2/service/sesv2/types"
 )
@@ -54,6 +55,71 @@ func sendBookingConfirmation(ctx context.Context, appt Appointment) {
 	})
 	if err != nil {
 		log.Printf("failed to send booking confirmation email to %s: %v", appt.UserEmail, err)
+	}
+}
+
+// sendBarberBookingNotice emails the barber that a new appointment was booked.
+// Best-effort: failures are logged but never block the booking itself.
+func sendBarberBookingNotice(ctx context.Context, appt Appointment) {
+	if fromEmail == "" || appt.BarberID == "" {
+		return
+	}
+
+	user, err := cognitoClient.AdminGetUser(ctx, &cognitoidentityprovider.AdminGetUserInput{
+		UserPoolId: &userPoolID,
+		Username:   &appt.BarberID,
+	})
+	if err != nil {
+		log.Printf("failed to look up barber %s for booking notice: %v", appt.BarberID, err)
+		return
+	}
+	var barberEmail string
+	for _, attr := range user.UserAttributes {
+		if aws.ToString(attr.Name) == "email" {
+			barberEmail = aws.ToString(attr.Value)
+			break
+		}
+	}
+	if barberEmail == "" {
+		return
+	}
+
+	subject := fmt.Sprintf("New booking — %s at %s", formatApptDate(appt.Date), appt.TimeSlot)
+	body := fmt.Sprintf(
+		"Hi %s,\n\n"+
+			"You have a new appointment on %s.\n\n"+
+			"  Date:     %s\n"+
+			"  Time:     %s\n"+
+			"  Service:  %s\n"+
+			"  Customer: %s\n\n"+
+			"%s"+
+			"— %s",
+		firstNonEmpty(appt.BarberName, "there"),
+		siteName,
+		formatApptDate(appt.Date),
+		appt.TimeSlot,
+		appt.Service,
+		firstNonEmpty(appt.UserName, appt.UserEmail),
+		noteLine(appt.Notes),
+		siteName,
+	)
+
+	_, err = sesClient.SendEmail(ctx, &sesv2.SendEmailInput{
+		FromEmailAddress: aws.String(fromEmail),
+		Destination: &types.Destination{
+			ToAddresses: []string{barberEmail},
+		},
+		Content: &types.EmailContent{
+			Simple: &types.Message{
+				Subject: &types.Content{Data: aws.String(subject)},
+				Body: &types.Body{
+					Text: &types.Content{Data: aws.String(body)},
+				},
+			},
+		},
+	})
+	if err != nil {
+		log.Printf("failed to send booking notice email to barber %s: %v", barberEmail, err)
 	}
 }
 
