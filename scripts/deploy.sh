@@ -13,6 +13,14 @@ if [ -z "$CUSTOMER_NAME" ]; then
   CUSTOMER_NAME="${CUSTOMER_NAME:-$DEFAULT_CUSTOMER_NAME}"
 fi
 
+# Toggles the "Site provided by Ozarks Digital Solutions" footer banner.
+# Set SHOW_AD_FOOTER=false to hide it for a given deploy. Defaults to shown.
+SHOW_AD_FOOTER="${SHOW_AD_FOOTER:-true}"
+if [ "$SHOW_AD_FOOTER" != "true" ] && [ "$SHOW_AD_FOOTER" != "false" ]; then
+  echo "Error: SHOW_AD_FOOTER must be 'true' or 'false', got '$SHOW_AD_FOOTER'." >&2
+  exit 1
+fi
+
 echo "==> Building Go Lambda binary..."
 (
   cd backend
@@ -43,6 +51,7 @@ window.SCHEDPRO_CONFIG = {
   cognitoClientId:    "$COGNITO_CLIENT_ID",
   cognitoRedirectUri: "$FRONTEND_URL",
   siteName:           "$CUSTOMER_NAME",
+  showAdFooter:       $SHOW_AD_FOOTER,
 };
 EOF
 

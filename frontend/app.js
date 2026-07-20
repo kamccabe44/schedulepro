@@ -89,6 +89,10 @@ function applyBranding() {
   document.getElementById("pageTitle").textContent = `${name} — Book a Haircut`;
   document.getElementById("brandName").textContent = name;
   document.getElementById("shareQrTitle").textContent = `Share ${name}`;
+
+  if (CFG.showAdFooter === false) {
+    document.getElementById("siteFooter").classList.add("hidden");
+  }
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
